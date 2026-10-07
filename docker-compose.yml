@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: historia_presidentes
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d historia_presidentes"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      args:
+        PROJECT: src/Presidents.Api/Presidents.Api.csproj
+        ASSEMBLY: Presidents.Api.dll
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=historia_presidentes;Username=postgres;Password=postgres
+      ConnectionStrings__Redis: redis:6379
+      Database__ApplyMigrations: "true"
+      Seed__ApplyDemoData: "true"
+      Seed__AdminEmail: ${ADMIN_EMAIL:-admin@historiapresidentes.local}
+      Seed__AdminPassword: ${ADMIN_PASSWORD:-ChangeMe_Dev_Only_123!}
+      Jwt__Key: ${JWT_KEY:-DevelopmentOnly_NotForProduction_JwtKey_32!}
+      AI__ApiKey: ${AI_API_KEY:-}
+    ports:
+      - "5080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      args:
+        PROJECT: src/Presidents.Web/Presidents.Web.csproj
+        ASSEMBLY: Presidents.Web.dll
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=historia_presidentes;Username=postgres;Password=postgres
+      ConnectionStrings__Redis: redis:6379
+      Database__ApplyMigrations: "true"
+      Seed__ApplyDemoData: "true"
+      Seed__AdminEmail: ${ADMIN_EMAIL:-admin@historiapresidentes.local}
+      Seed__AdminPassword: ${ADMIN_PASSWORD:-ChangeMe_Dev_Only_123!}
+      Public__CanonicalBaseUrl: ${PUBLIC_CANONICAL_BASE_URL:-http://localhost:5088}
+      AI__ApiKey: ${AI_API_KEY:-}
+    ports:
+      - "5088:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

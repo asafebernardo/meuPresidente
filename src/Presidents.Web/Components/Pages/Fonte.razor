@@ -1,0 +1,50 @@
+@page "/fontes/{Slug}"
+@inject QueryService Queries
+
+@if (Missing)
+{
+    <Seo Title="Fonte não encontrada" Description="Não há fonte publicada neste endereço." Path="@($"/fontes/{Slug}")" />
+    <section class="section"><div class="wrap"><h1>Fonte não encontrada</h1></div></section>
+}
+else if (Item is not null)
+{
+    <Seo Title="@Item.Name" Description="@(Item.Title ?? Item.Name)" Path="@($"/fontes/{Item.Slug}")" />
+    <section class="section">
+        <div class="wrap">
+            @if (Item.Demonstration)
+            {
+                <p class="banner">Fonte incluída na semente de demonstração.</p>
+            }
+            <h1>@Item.Name</h1>
+            <p><span class="badge">@Item.SourceType</span> <span class="badge">@Item.Reliability</span></p>
+            <p>Título: @(Item.Title ?? "não informado")</p>
+            <p>Autor: @(Item.Author ?? "não informado") · Veículo: @(Item.Publisher ?? "não informado")</p>
+            <p>Publicação: @Ui.Date(Item.PublicationDate) · Acesso: @Ui.Date(Item.AccessedAt)</p>
+            @if (!string.IsNullOrWhiteSpace(Item.Notes))
+            {
+                <p>@Item.Notes</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Item.Url))
+            {
+                <p><a href="@Item.Url" rel="noopener noreferrer">Abrir fonte original</a></p>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    private SourcePageDto? Item;
+    private bool Missing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Item = await Queries.SourceAsync(Slug, HttpContext.RequestAborted);
+        if (Item is null)
+        {
+            Missing = true;
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+    }
+}

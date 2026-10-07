@@ -1,0 +1,23 @@
+@if (Items.Count == 0)
+{
+    <p class="empty">Nenhum registro publicado neste grupo.</p>
+}
+else
+{
+    <div class="facts">
+        @foreach (var hit in Items)
+        {
+            <article class="card">
+                <h3><a href="@hit.Url">@hit.Title</a></h3>
+                @if (!string.IsNullOrWhiteSpace(hit.Subtitle))
+                {
+                    <p>@hit.Subtitle</p>
+                }
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<SearchHit> Items { get; set; } = [];
+}

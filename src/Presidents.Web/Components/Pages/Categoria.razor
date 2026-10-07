@@ -1,0 +1,69 @@
+@page "/categorias/{Slug}"
+@inject QueryService Queries
+
+@if (Missing)
+{
+    <Seo Title="Categoria não encontrada" Description="Não há categoria publicada neste endereço." Path="@($"/categorias/{Slug}")" />
+    <section class="section"><div class="wrap"><h1>Categoria não encontrada</h1></div></section>
+}
+else if (Category is not null)
+{
+    <Seo Title="@Category.Name" Description="@(Category.Description ?? $"Registros publicados na categoria {Category.Name}.")" Path="@($"/categorias/{Category.Slug}")" />
+    <section class="section">
+        <div class="wrap">
+            <h1>@Category.Name</h1>
+            <p>@(Category.Description ?? "Categoria do acervo publicado.")</p>
+            <h2>Acontecimentos</h2>
+            @foreach (var ev in Events)
+            {
+                <FactCard Title="@ev.Title" Href="@($"/acontecimentos/{ev.Slug}")" Date="@ev.EventDate" Kind="@ev.SummaryKind" Summary="@(ev.NeutralSummary ?? ev.Description)" Categories="@ev.Categories" Sources="@ev.Sources" Demonstration="@ev.Demonstration" Divergence="@ev.DivergenceNote" />
+            }
+            @if (Events.Count == 0)
+            {
+                <p class="empty">Nenhum acontecimento publicado nesta categoria.</p>
+            }
+            <h2>Leis</h2>
+            @foreach (var law in Laws)
+            {
+                <article class="card"><h3><a href="@($"/leis/{law.Slug}")">@law.Title</a></h3><p>@law.Number/@law.Year · @law.Kind</p></article>
+            }
+            @if (Laws.Count == 0)
+            {
+                <p class="empty">Nenhuma lei publicada nesta categoria.</p>
+            }
+            <h2>Políticas</h2>
+            @foreach (var policy in Policies)
+            {
+                <article class="card"><h3><a href="@($"/politicas/{policy.Slug}")">@policy.Name</a></h3><p>@policy.Description</p></article>
+            }
+            @if (Policies.Count == 0)
+            {
+                <p class="empty">Nenhuma política publicada nesta categoria.</p>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    private CategoryDto? Category;
+    private IReadOnlyList<EventCardDto> Events = [];
+    private IReadOnlyList<LawCardDto> Laws = [];
+    private IReadOnlyList<PolicyCardDto> Policies = [];
+    private bool Missing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Queries.CategoryAsync(Slug, HttpContext.RequestAborted);
+        Category = result.Category;
+        Events = result.Events;
+        Laws = result.Laws;
+        Policies = result.Policies;
+        if (Category is null)
+        {
+            Missing = true;
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+    }
+}

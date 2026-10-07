@@ -1,0 +1,64 @@
+@page "/admin/ingestao"
+@attribute [Authorize(Policy = "Editor")]
+@layout AdminLayout
+@inject ImportCoordinator Imports
+@inject PresidentService Presidents
+
+<PageTitle>Ingestão</PageTitle>
+<h1>Ingestão</h1>
+<p class="muted">Cada canal tem o próprio adaptador. A coleta entra como rascunho, guarda URL, data, conteúdo permitido e hash, e não publica sozinha. Notícia não aceita o artigo integral.</p>
+@if (!string.IsNullOrWhiteSpace(Error)) { <p class="error" role="alert">@Error</p> }
+@if (Result is not null) { <p class="banner" role="status">@Result.Message</p> }
+<EditForm Model="Form" FormName="import" OnSubmit="Save" method="post">
+    <div class="form-grid">
+        <label>Canal <EnumSelect T="ImportChannel" @bind-Value="Form.Channel" /></label>
+        <label>URL <InputText @bind-Value="Form.Url" /></label>
+        <label>Identificador externo <InputText @bind-Value="Form.ExternalId" /></label>
+        <label>Título <InputText @bind-Value="Form.Title" /></label>
+        <label>Veículo <InputText @bind-Value="Form.Publisher" /></label>
+        <label>Autor <InputText @bind-Value="Form.Author" /></label>
+        <label>Data <InputDate @bind-Value="Form.PublicationDate" /></label>
+        <label>Resumo próprio <InputTextArea @bind-Value="Form.Summary" /></label>
+        <label>Trecho curto <InputTextArea @bind-Value="Form.Excerpt" maxlength="400" /></label>
+        <label>Recorte permitido <InputTextArea @bind-Value="Form.RawContent" /></label>
+        <label>Número <InputText @bind-Value="Form.Number" /></label>
+        <label>Ano <InputNumber @bind-Value="Form.Year" /></label>
+        <label>Tipo normativo <EnumSelect T="NormKind" @bind-Value="Form.Kind" /></label>
+        <label>Presidente em exercício, sem autoria automática
+            <InputSelect @bind-Value="Form.PresidentInOfficeId">
+                <option value="">Não informado</option>
+                @foreach (var president in Options) { <option value="@president.Id">@president.Name</option> }
+            </InputSelect>
+        </label>
+        <button type="submit">Importar como rascunho</button>
+    </div>
+</EditForm>
+
+@code {
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "import")] public ImportRequest? Form { get; set; }
+    private IReadOnlyList<NamedOption> Options = [];
+    private ImportResultDto? Result;
+    private string? Error;
+    private ActorContext Actor => Actors.From(HttpContext.User);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Form ??= new ImportRequest();
+        Options = await Presidents.OptionsAsync(false, Actor, HttpContext.RequestAborted);
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            Result = await Imports.ImportAsync(Form!.Channel, Form, Actor, HttpContext.RequestAborted);
+            Error = null;
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+            Result = null;
+        }
+    }
+}

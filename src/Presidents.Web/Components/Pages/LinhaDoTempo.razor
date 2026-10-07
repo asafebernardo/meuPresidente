@@ -1,0 +1,44 @@
+@page "/linha-do-tempo"
+@inject QueryService Queries
+
+<Seo Title="Linha do tempo" Description="Mandatos publicados em ordem cronológica e acontecimentos com data." Path="/linha-do-tempo" />
+
+<section class="section">
+    <div class="wrap">
+        <h1>Linha do tempo</h1>
+        <p class="lede">Cada período permanece separado. A página não trata mandatos sucessivos como um único governo contínuo.</p>
+        @if (Page is not null)
+        {
+            <div class="timeline">
+                @foreach (var mandate in Page.Mandates)
+                {
+                    <article>
+                        <p class="muted">@mandate.StartDate.ToString("dd/MM/yyyy") – @(mandate.EndDate?.ToString("dd/MM/yyyy") ?? "em aberto")</p>
+                        <h2><a href="@($"/presidentes/{mandate.Slug}")">@mandate.PresidentName</a></h2>
+                        <p>@mandate.GovernmentType · Chegada: @mandate.ArrivalMethod · @(mandate.Party ?? "partido não informado")</p>
+                    </article>
+                }
+            </div>
+            <h2>Acontecimentos por período</h2>
+            @if (Page.Events.Count == 0)
+            {
+                <p class="empty">Nenhum acontecimento publicado.</p>
+            }
+            <div class="facts">
+                @foreach (var ev in Page.Events)
+                {
+                    <article class="card">
+                        <p class="muted">@(ev.EventDate?.ToString("dd/MM/yyyy") ?? "Data não informada") · @ev.Importance</p>
+                        <h3><a href="@($"/acontecimentos/{ev.Slug}")">@ev.Title</a></h3>
+                        <p>@(ev.PresidentName ?? "Sem presidente vinculado")</p>
+                    </article>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private TimelineDto? Page;
+    protected override async Task OnInitializedAsync() => Page = await Queries.TimelineAsync(CancellationToken.None);
+}

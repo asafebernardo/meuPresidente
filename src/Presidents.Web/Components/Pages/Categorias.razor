@@ -1,0 +1,27 @@
+@page "/categorias"
+@inject CategoryService Categories
+
+<Seo Title="Categorias" Description="Temas usados para organizar acontecimentos, leis e políticas." Path="/categorias" />
+
+<section class="section">
+    <div class="wrap">
+        <h1>Categorias</h1>
+        <div class="grid cards-4">
+            @foreach (var category in Items)
+            {
+                <a class="card" href="@($"/categorias/{category.Slug}")">
+                    <strong>@category.Name</strong>
+                    @if (!string.IsNullOrWhiteSpace(category.Description))
+                    {
+                        <p>@category.Description</p>
+                    }
+                </a>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private IReadOnlyList<Category> Items = [];
+    protected override async Task OnInitializedAsync() => Items = await Categories.ListPublicAsync(CancellationToken.None);
+}

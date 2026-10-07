@@ -1,0 +1,85 @@
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <p class="@(Failed ? "error" : "banner")" role="status">@Message</p>
+}
+<form method="post" @formname="@FormName" @onsubmit="Apply">
+    <AntiforgeryToken />
+    <div class="table-wrap">
+        <table>
+            <caption>@Caption</caption>
+            <thead>
+                <tr>
+                    <th>Registro</th>
+                    <th>Situação</th>
+                    <th>Detalhe</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Rows.Count == 0)
+                {
+                    <tr><td colspan="4">Nenhum registro.</td></tr>
+                }
+                @foreach (var row in Rows)
+                {
+                    <tr>
+                        <td>
+                            @row.Title
+                            @if (row.Demonstration)
+                            {
+                                <span class="badge">demonstração</span>
+                            }
+                        </td>
+                        <td>@row.Status</td>
+                        <td>@row.Extra</td>
+                        <td class="actions">
+                            @if (!string.IsNullOrWhiteSpace(EditBase))
+                            {
+                                <a href="@($"{EditBase}/{row.Id}")">Editar</a>
+                            }
+                            <button class="secondary" type="submit" name="action" value="@($"review:{row.Id}")">Revisão</button>
+                            <button type="submit" name="action" value="@($"publish:{row.Id}")">Publicar</button>
+                            <button class="secondary" type="submit" name="action" value="@($"draft:{row.Id}")">Rascunho</button>
+                            <button class="secondary" type="submit" name="action" value="@($"archive:{row.Id}")">Arquivar</button>
+                            @if (CanDelete)
+                            {
+                                <button class="danger" type="submit" name="action" value="@($"delete:{row.Id}")">Excluir</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</form>
+
+@code {
+    [Parameter] public string Caption { get; set; } = "Registros";
+    [Parameter] public string FormName { get; set; } = "command";
+    [Parameter] public string? EditBase { get; set; }
+    [Parameter] public bool CanDelete { get; set; }
+    [Parameter] public IReadOnlyList<AdminRow> Rows { get; set; } = [];
+    [Parameter] public Func<string, Guid, Task>? OnCommand { get; set; }
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+
+    private string? Message;
+    private bool Failed;
+
+    private async Task Apply()
+    {
+        var form = await HttpContext.Request.ReadFormAsync(HttpContext.RequestAborted);
+        if (!AdminCommand.TryParse(form["action"], out var verb, out var id) || OnCommand is null)
+            return;
+        try
+        {
+            await OnCommand(verb, id);
+            Message = "Ação registrada.";
+            Failed = false;
+        }
+        catch (Exception exception) when (exception is DomainException or ForbiddenException or NotFoundException)
+        {
+            Message = Ui.Message(exception);
+            Failed = true;
+        }
+    }
+}

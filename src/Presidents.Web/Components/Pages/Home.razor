@@ -1,0 +1,161 @@
+﻿@page "/"
+@inject QueryService Queries
+@inject IConfiguration Configuration
+
+<Seo Title="História dos Presidentes" Description="Informação histórica organizada por fatos, documentos, leis e fontes." Path="/" JsonLd="@JsonLd" />
+
+<section class="hero">
+    <div class="wrap">
+        <p class="eyebrow">Acervo público</p>
+        <h1>Conheça a história dos presidentes do Brasil</h1>
+        <p class="lede">Informação histórica organizada por fatos, documentos, leis e fontes.</p>
+        <form class="search-form" method="get" action="/busca" role="search">
+            <label class="visually-hidden" for="q">Pesquisa</label>
+            <input id="q" type="search" name="q" placeholder="Pesquise um presidente, lei, acontecimento ou tema..." />
+            <button type="submit">Pesquisar</button>
+        </form>
+    </div>
+</section>
+
+@if (Page is not null)
+{
+    <section class="section">
+        <div class="wrap">
+            @if (Page.Presidents.Any(item => item.Demonstration) || Page.RecentEvents.Any(item => item.Demonstration) || Page.Laws.Any(item => item.Demonstration))
+            {
+                <p class="banner">Parte do acervo visível é semente de demonstração. Cada cartão indica essa origem e mostra somente as fontes cadastradas.</p>
+            }
+            <div class="section-head">
+                <h2>Linha do tempo</h2>
+                <a href="/linha-do-tempo">Ver todos os períodos</a>
+            </div>
+            <div class="timeline">
+                @foreach (var mandate in Page.Timeline.Take(8))
+                {
+                    <article>
+                        <p class="muted">@mandate.StartDate.ToString("dd/MM/yyyy") – @(mandate.EndDate?.ToString("dd/MM/yyyy") ?? "em aberto")</p>
+                        <h3><a href="@($"/presidentes/{mandate.Slug}")">@mandate.PresidentName</a></h3>
+                        <p>@mandate.GovernmentType · @mandate.ArrivalMethod</p>
+                    </article>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="wrap">
+            <div class="section-head">
+                <h2>Presidentes em destaque</h2>
+                <a href="/presidentes">Todos os presidentes</a>
+            </div>
+            <div class="grid cards-3">
+                @foreach (var president in Page.Presidents)
+                {
+                    <article class="card">
+                        <div class="portrait" aria-hidden="true">
+                            @if (!string.IsNullOrWhiteSpace(president.PhotoUrl))
+                            {
+                                <img src="@president.PhotoUrl" alt="" />
+                            }
+                            else
+                            {
+                                @Ui.Initials(president.Name)
+                            }
+                        </div>
+                        <h3><a href="@($"/presidentes/{president.Slug}")">@president.FullName</a></h3>
+                        <p>@president.Mandate</p>
+                        <p class="muted">@(president.Party ?? "Partido não informado no resumo")</p>
+                    </article>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="wrap">
+            <div class="section-head">
+                <h2>Categorias</h2>
+                <a href="/categorias">Ver categorias</a>
+            </div>
+            <div class="grid cards-4">
+                @foreach (var category in Page.Categories)
+                {
+                    <a class="card" href="@($"/categorias/{category.Slug}")">@category.Name</a>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="wrap grid cards-2">
+            <div>
+                <h2>Acontecimentos publicados</h2>
+                <div class="facts">
+                    @foreach (var item in Page.RecentEvents)
+                    {
+                        <FactCard Title="@item.Title" Href="@($"/acontecimentos/{item.Slug}")" Date="@item.EventDate" Kind="@item.SummaryKind" Summary="@item.NeutralSummary" Divergence="@item.DivergenceNote" Demonstration="@item.Demonstration" Categories="@item.Categories" Sources="@item.Sources" />
+                    }
+                    @if (Page.RecentEvents.Count == 0)
+                    {
+                        <p class="empty">Nenhum acontecimento publicado.</p>
+                    }
+                </div>
+            </div>
+            <div>
+                <h2>Leis catalogadas</h2>
+                <div class="facts">
+                    @foreach (var law in Page.Laws)
+                    {
+                        <article class="card">
+                            <p><span class="badge">@law.Kind</span> <span class="badge">@law.Number/@law.Year</span></p>
+                            <h3><a href="@($"/leis/{law.Slug}")">@law.Title</a></h3>
+                            <p>@law.Summary</p>
+                        </article>
+                    }
+                    @if (Page.Laws.Count == 0)
+                    {
+                        <p class="empty">Nenhuma lei publicada.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="wrap">
+            <h2>Estatísticas do banco publicado</h2>
+            <div class="grid cards-4">
+                <article class="card"><p class="stat">@Page.Counts.Presidents</p><p>Presidentes</p></article>
+                <article class="card"><p class="stat">@Page.Counts.Presidencies</p><p>Mandatos</p></article>
+                <article class="card"><p class="stat">@Page.Counts.Events</p><p>Acontecimentos</p></article>
+                <article class="card"><p class="stat">@Page.Counts.Laws</p><p>Leis</p></article>
+                <article class="card"><p class="stat">@Page.Counts.Policies</p><p>Políticas</p></article>
+                <article class="card"><p class="stat">@Page.Counts.Sources</p><p>Fontes</p></article>
+                <article class="card"><p class="stat">@Page.Counts.Indicators</p><p>Indicadores</p></article>
+                <article class="card"><p class="stat">@Page.Counts.Categories</p><p>Categorias</p></article>
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    private HomePageDto? Page;
+    private string JsonLd => Ui.Json(new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "WebSite",
+        ["name"] = "História dos Presidentes",
+        ["url"] = Canonical,
+        ["description"] = "Informação histórica organizada por fatos, documentos, leis e fontes.",
+        ["potentialAction"] = new Dictionary<string, object?>
+        {
+            ["@type"] = "SearchAction",
+            ["target"] = Canonical + "/busca?q={query}",
+            ["query-input"] = "required name=query"
+        }
+    });
+
+    private string Canonical => (Configuration["Public:CanonicalBaseUrl"] ?? "http://localhost:5088").TrimEnd('/');
+
+    protected override async Task OnInitializedAsync() => Page = await Queries.HomeAsync(CancellationToken.None);
+}

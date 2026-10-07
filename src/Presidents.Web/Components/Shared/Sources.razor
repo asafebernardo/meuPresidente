@@ -1,0 +1,45 @@
+@if (Items.Count == 0)
+{
+    <p class="muted">Nenhuma fonte publicada está associada. Este trecho não deve ser lido como fato documentado.</p>
+}
+else
+{
+    <details class="source-box" open="@Open">
+        <summary>Ver fontes (@Items.Count)</summary>
+        <ul class="source-list">
+            @foreach (var source in Items)
+            {
+                <li>
+                    <strong>@source.Name</strong>
+                    <span class="badge">@source.SourceType</span>
+                    <span class="badge">@source.Reliability</span>
+                    @if (!string.IsNullOrWhiteSpace(source.Author))
+                    {
+                        <span> · @source.Author</span>
+                    }
+                    @if (source.PublicationDate is not null)
+                    {
+                        <span> · @Ui.Date(source.PublicationDate)</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(source.Excerpt))
+                    {
+                        <blockquote>@source.Excerpt</blockquote>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(source.Url))
+                    {
+                        <div><a href="@source.Url" rel="noopener noreferrer">Abrir fonte original</a></div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(source.Annotation))
+                    {
+                        <p class="muted">@source.Annotation</p>
+                    }
+                </li>
+            }
+        </ul>
+    </details>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<SourceCitationDto> Items { get; set; } = [];
+    [Parameter] public bool Open { get; set; }
+}

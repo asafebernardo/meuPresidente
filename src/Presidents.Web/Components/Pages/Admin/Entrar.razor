@@ -1,0 +1,27 @@
+@page "/admin/entrar"
+@attribute [AllowAnonymous]
+
+<Seo Title="Entrar" Description="Acesso da administração do acervo." Path="/admin/entrar" />
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+
+<section class="login">
+    <h1>Entrar</h1>
+    <p>O acesso é restrito aos perfis Admin, Editor e Revisor.</p>
+    @if (Failed)
+    {
+        <p class="error" role="alert">E-mail ou senha não conferem, ou a conta está temporariamente bloqueada.</p>
+    }
+    <form class="form-grid" method="post" action="/conta/entrar">
+        <AntiforgeryToken />
+        <label>E-mail <input type="email" name="email" autocomplete="username" required /></label>
+        <label>Senha <input type="password" name="password" autocomplete="current-password" required /></label>
+        <button type="submit">Entrar</button>
+    </form>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "erro")] public int? Erro { get; set; }
+    private bool Failed => Erro == 1;
+}

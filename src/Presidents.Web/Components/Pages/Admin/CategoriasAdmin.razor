@@ -1,0 +1,89 @@
+@page "/admin/categorias"
+@page "/admin/categorias/novo"
+@page "/admin/categorias/{Id:guid}"
+@attribute [Authorize(Policy = "Editor")]
+@layout AdminLayout
+@inject CategoryService Categories
+@inject PublicationService Publication
+@inject NavigationManager Nav
+
+<PageTitle>Categorias</PageTitle>
+<h1>Categorias</h1>
+@if (!string.IsNullOrWhiteSpace(Error)) { <p class="error" role="alert">@Error</p> }
+@if (ShowForm)
+{
+    <p><a href="/admin/categorias">Voltar à lista</a></p>
+    <EditForm Model="Form" FormName="category" OnSubmit="Save" method="post">
+        <div class="form-grid">
+            <label>Nome <InputText @bind-Value="Form.Name" /></label>
+            <label>Endereço <InputText @bind-Value="Form.Slug" /></label>
+            <label>Ordem <InputNumber @bind-Value="Form.SortOrder" /></label>
+            <label>Descrição <InputTextArea @bind-Value="Form.Description" /></label>
+            <button type="submit">Salvar</button>
+        </div>
+    </EditForm>
+    <PublicationButtons Id="Id" Type="ContentEntityType.Category" Key="category-status" />
+    @if (Actor.IsAdmin && Id is not null)
+    {
+        <form method="post" @formname="remove-category" @onsubmit="Remove"><AntiforgeryToken /><button class="danger" type="submit">Excluir</button></form>
+    }
+}
+else
+{
+    <p><a class="button" href="/admin/categorias/novo">Nova categoria</a></p>
+    <AdminTable Caption="Categorias" Rows="Rows" EditBase="/admin/categorias" CanDelete="Actor.IsAdmin" OnCommand="Handle" />
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "category")] public CategoryForm? Form { get; set; }
+    private IReadOnlyList<AdminRow> Rows = [];
+    private string? Error;
+    private ActorContext Actor => Actors.From(HttpContext.User);
+    private bool ShowForm => Id is not null || Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].EndsWith("/novo", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var posted = Form is not null;
+        Form ??= new CategoryForm();
+        var token = HttpContext.RequestAborted;
+        if (!posted && ShowForm && Id is Guid id)
+        {
+            var loaded = await Categories.GetFormAsync(id, Actor, token);
+            if (loaded is null) Error = "Categoria não encontrada.";
+            else Form = loaded;
+        }
+        else if (!ShowForm)
+            Rows = (await Categories.ListAdminAsync(Actor, token)).Items;
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            Form!.Id = Id;
+            var saved = await Categories.SaveAsync(Form, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo($"/admin/categorias/{saved}", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task Remove()
+    {
+        if (Id is not Guid id) return;
+        try { await Categories.DeleteAsync(id, Actor, HttpContext.RequestAborted); Nav.NavigateTo("/admin/categorias", forceLoad: true); }
+        catch (Exception exception) when (exception is DomainException or ForbiddenException or NotFoundException) { Error = Ui.Message(exception); }
+    }
+
+    private async Task Handle(string verb, Guid id)
+    {
+        var token = HttpContext.RequestAborted;
+        if (verb == "delete") await Categories.DeleteAsync(id, Actor, token);
+        else if (AdminCommand.ToStatus(verb) is { } status) await Publication.ChangeCategoryAsync(id, status, Actor, token);
+        Rows = (await Categories.ListAdminAsync(Actor, token)).Items;
+    }
+}

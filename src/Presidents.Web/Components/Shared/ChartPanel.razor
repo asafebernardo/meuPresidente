@@ -1,0 +1,60 @@
+<section class="panel">
+    <h3>@Series.Indicator <span class="muted">@Series.Unit</span></h3>
+    @if (Series.PointsByColumn.All(points => points.Count == 0))
+    {
+        <p class="empty">Sem valor publicado.</p>
+    }
+    else
+    {
+        <svg class="chart" viewBox="0 0 640 220" role="img" aria-label="@($"Série publicada de {Series.Indicator}")">
+            <line x1="40" y1="20" x2="40" y2="180" stroke="#e3d9c8" />
+            <line x1="40" y1="180" x2="620" y2="180" stroke="#e3d9c8" />
+            @for (var index = 0; index < Series.PointsByColumn.Count; index++)
+            {
+                var points = Series.PointsByColumn[index];
+                if (points.Count == 0)
+                    continue;
+                <polyline fill="none" stroke="@Color(index)" stroke-width="2.5" points="@Polyline(points)" />
+            }
+            <text x="40" y="205">@MinYear</text>
+            <text x="560" y="205">@MaxYear</text>
+        </svg>
+        <p class="legend">
+            @for (var index = 0; index < Names.Count; index++)
+            {
+                <span><i class="swatch" style="background:@Color(index)"></i>@Names[index]</span>
+            }
+        </p>
+    }
+</section>
+
+@code {
+    private static readonly string[] Colors = ["#1b3a4b", "#8d6b3a", "#1f6b4a", "#1d4e89"];
+
+    [Parameter, EditorRequired] public ChartSeries Series { get; set; } = default!;
+    [Parameter] public IReadOnlyList<string> Names { get; set; } = [];
+
+    private int MinYear => Points.Count == 0 ? 0 : Points.Min(point => point.Year);
+    private int MaxYear => Points.Count == 0 ? 0 : Points.Max(point => point.Year);
+    private IReadOnlyList<ChartPoint> Points => Series.PointsByColumn.SelectMany(item => item).ToList();
+
+    private string Color(int index) => Colors[index % Colors.Length];
+
+    private string Polyline(IReadOnlyList<ChartPoint> points)
+    {
+        var years = Points.Select(point => point.Year).ToList();
+        var values = Points.Select(point => point.Value).ToList();
+        var minYear = years.Min();
+        var maxYear = years.Max();
+        var minValue = values.Min();
+        var maxValue = values.Max();
+        var yearSpan = Math.Max(1, maxYear - minYear);
+        var valueSpan = maxValue == minValue ? 1 : maxValue - minValue;
+        return string.Join(' ', points.OrderBy(point => point.Year).Select(point =>
+        {
+            var x = 40 + (point.Year - minYear) / (decimal)yearSpan * 560;
+            var y = 180 - (point.Value - minValue) / valueSpan * 150;
+            return $"{x:0.##},{y:0.##}";
+        }));
+    }
+}

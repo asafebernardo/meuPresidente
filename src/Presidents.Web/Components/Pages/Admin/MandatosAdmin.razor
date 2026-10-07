@@ -1,0 +1,121 @@
+@page "/admin/mandatos"
+@page "/admin/mandatos/novo"
+@page "/admin/mandatos/{Id:guid}"
+@attribute [Authorize(Policy = "Editor")]
+@layout AdminLayout
+@inject PresidencyService Mandates
+@inject PresidentService Presidents
+@inject PublicationService Publication
+@inject NavigationManager Nav
+
+<PageTitle>Mandatos</PageTitle>
+<h1>Mandatos</h1>
+<p class="muted">Cada período fica separado. Forma de chegada e tipo de governo não são presumidos.</p>
+@if (!string.IsNullOrWhiteSpace(Error)) { <p class="error" role="alert">@Error</p> }
+@if (ShowForm)
+{
+    <p><a href="/admin/mandatos">Voltar à lista</a></p>
+    <EditForm Model="Form" FormName="mandate" OnSubmit="Save" method="post">
+        <div class="form-grid">
+            <label>Presidente
+                <InputSelect @bind-Value="Form.PresidentId">
+                    <option value="">Selecione</option>
+                    @foreach (var president in Options)
+                    {
+                        <option value="@president.Id">@president.Name</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>Ordem <InputNumber @bind-Value="Form.Ordinal" /></label>
+            <label>Início <InputDate @bind-Value="Form.StartDate" /></label>
+            <label>Fim <InputDate @bind-Value="Form.EndDate" /></label>
+            <label>Vice <InputText @bind-Value="Form.VicePresident" /></label>
+            <label>Partido <InputText @bind-Value="Form.Party" /></label>
+            <label>Tipo de governo <EnumSelect T="GovernmentType" @bind-Value="Form.GovernmentType" /></label>
+            <label>Chegada ao poder <EnumSelect T="ArrivalMethod" @bind-Value="Form.ArrivalMethod" /></label>
+            <label>Contexto político <InputTextArea @bind-Value="Form.PoliticalContext" /></label>
+            <label>Divergência entre fontes <InputTextArea @bind-Value="Form.DivergenceNote" /></label>
+            <button type="submit">Salvar</button>
+        </div>
+    </EditForm>
+    <PublicationButtons Id="Id" Type="ContentEntityType.Presidency" Key="mandate-status" />
+    @if (Actor.IsAdmin && Id is not null)
+    {
+        <form method="post" @formname="remove-mandate" @onsubmit="Remove"><AntiforgeryToken /><button class="danger" type="submit">Excluir</button></form>
+    }
+}
+else
+{
+    <p><a class="button" href="/admin/mandatos/novo">Novo mandato</a></p>
+    <AdminTable Caption="Mandatos" Rows="Rows" EditBase="/admin/mandatos" CanDelete="Actor.IsAdmin" OnCommand="Handle" />
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "mandate")] public PresidencyForm? Form { get; set; }
+    private IReadOnlyList<AdminRow> Rows = [];
+    private IReadOnlyList<NamedOption> Options = [];
+    private string? Error;
+    private ActorContext Actor => Actors.From(HttpContext.User);
+    private bool ShowForm => Id is not null || Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].EndsWith("/novo", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var posted = Form is not null;
+        Form ??= new PresidencyForm();
+        var token = HttpContext.RequestAborted;
+        if (ShowForm)
+        {
+            Options = await Presidents.OptionsAsync(false, Actor, token);
+            if (!posted && Id is Guid id)
+            {
+                var loaded = await Mandates.GetFormAsync(id, Actor, token);
+                if (loaded is null) Error = "Mandato não encontrado.";
+                else Form = loaded;
+            }
+        }
+        else
+        {
+            var items = await Mandates.ListAsync(Actor, null, token);
+            Rows = items.Select(item => new AdminRow(item.Id, item.President?.FullName ?? "Presidente", EnumLabels.For(item.Status), $"{item.StartDate:dd/MM/yyyy} · {EnumLabels.For(item.ArrivalMethod)}", item.Provenance == DataProvenance.DemonstrationSeed)).ToList();
+        }
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            Form!.Id = Id;
+            var saved = await Mandates.SaveAsync(Form, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo($"/admin/mandatos/{saved}", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task Remove()
+    {
+        if (Id is not Guid id) return;
+        try
+        {
+            await Mandates.DeleteAsync(id, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo("/admin/mandatos", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task Handle(string verb, Guid id)
+    {
+        var token = HttpContext.RequestAborted;
+        if (verb == "delete") await Mandates.DeleteAsync(id, Actor, token);
+        else if (AdminCommand.ToStatus(verb) is { } status) await Publication.ChangePresidencyAsync(id, status, Actor, token);
+        var items = await Mandates.ListAsync(Actor, null, token);
+        Rows = items.Select(item => new AdminRow(item.Id, item.President?.FullName ?? "Presidente", EnumLabels.For(item.Status), $"{item.StartDate:dd/MM/yyyy}", item.Provenance == DataProvenance.DemonstrationSeed)).ToList();
+    }
+}

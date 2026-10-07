@@ -1,0 +1,54 @@
+@page "/politicas/{Slug}"
+@inject QueryService Queries
+
+@if (Missing)
+{
+    <Seo Title="Política não encontrada" Description="Não há política publicada neste endereço." Path="@($"/politicas/{Slug}")" />
+    <section class="section"><div class="wrap"><h1>Política não encontrada</h1></div></section>
+}
+else if (Item is not null)
+{
+    <Seo Title="@Item.Name" Description="@(Item.Objective ?? Item.Description ?? Item.Name)" Path="@($"/politicas/{Item.Slug}")" />
+    <section class="section">
+        <div class="wrap">
+            @if (Item.Demonstration)
+            {
+                <p class="banner">Registro de demonstração. Resultados e críticas abaixo só aparecem quando foram cadastrados como afirmações com fonte.</p>
+            }
+            <h1>@Item.Name</h1>
+            @if (!string.IsNullOrWhiteSpace(Item.PresidentSlug))
+            {
+                <p>Presidente: <a href="@($"/presidentes/{Item.PresidentSlug}")">@Item.PresidentName</a></p>
+            }
+            <p>@Ui.Date(Item.StartDate) – @Ui.Date(Item.EndDate)</p>
+            <p>@Item.Description</p>
+            <h2>Objetivo</h2>
+            <p>@(Item.Objective ?? "Não informado.")</p>
+            <h2>Resultados documentados</h2>
+            <StatementList Items="Item.Results" />
+            <h2>Críticas</h2>
+            <StatementList Items="Item.Criticisms" />
+            <h2>Avaliações</h2>
+            <StatementList Items="Item.Assessments" />
+            <h2>Fontes da política</h2>
+            <Sources Items="Item.Sources" Open="true" />
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    private PolicyCardDto? Item;
+    private bool Missing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Item = await Queries.PolicyAsync(Slug, HttpContext.RequestAborted);
+        if (Item is null)
+        {
+            Missing = true;
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+    }
+}

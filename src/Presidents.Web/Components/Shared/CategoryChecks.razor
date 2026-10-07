@@ -1,0 +1,15 @@
+<div class="checks">
+    @foreach (var category in Categories)
+    {
+        <label>
+            <input type="checkbox" name="@($"{FormName}.CategoryIds")" value="@category.Id" checked="@Selected.Contains(category.Id)" />
+            @category.Title
+        </label>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string FormName { get; set; } = "";
+    [Parameter] public IReadOnlyList<AdminRow> Categories { get; set; } = [];
+    [Parameter] public IReadOnlyList<Guid> Selected { get; set; } = [];
+}

@@ -1,0 +1,100 @@
+@page "/admin/politicas"
+@page "/admin/politicas/novo"
+@page "/admin/politicas/{Id:guid}"
+@attribute [Authorize(Policy = "Editor")]
+@layout AdminLayout
+@inject PolicyService Policies
+@inject AdminCatalogService Catalog
+@inject PresidentService Presidents
+@inject CategoryService Categories
+@inject PublicationService Publication
+@inject NavigationManager Nav
+
+<PageTitle>Políticas</PageTitle>
+<h1>Políticas públicas</h1>
+<p class="muted">Resultados, críticas e avaliações são afirmações separadas. Elas não nascem do campo de descrição.</p>
+@if (!string.IsNullOrWhiteSpace(Error)) { <p class="error" role="alert">@Error</p> }
+@if (ShowForm)
+{
+    <p><a href="/admin/politicas">Voltar à lista</a></p>
+    <EditForm Model="Form" FormName="policy" OnSubmit="Save" method="post">
+        <div class="form-grid">
+            <label>Nome <InputText @bind-Value="Form.Name" /></label>
+            <label>Endereço <InputText @bind-Value="Form.Slug" /></label>
+            <label>Presidente
+                <InputSelect @bind-Value="Form.PresidentId">
+                    <option value="">Não vincular</option>
+                    @foreach (var president in Options) { <option value="@president.Id">@president.Name</option> }
+                </InputSelect>
+            </label>
+            <label>Início <InputDate @bind-Value="Form.StartDate" /></label>
+            <label>Fim <InputDate @bind-Value="Form.EndDate" /></label>
+            <label>Descrição <InputTextArea @bind-Value="Form.Description" /></label>
+            <label>Objetivo <InputTextArea @bind-Value="Form.Objective" /></label>
+            <fieldset>
+                <legend>Categorias</legend>
+                <CategoryChecks FormName="policy" Categories="CategoryRows" Selected="Form.CategoryIds" />
+            </fieldset>
+            <button type="submit">Salvar</button>
+        </div>
+    </EditForm>
+    <PublicationButtons Id="Id" Type="ContentEntityType.Policy" Key="policy-status" />
+}
+else
+{
+    <p><a class="button" href="/admin/politicas/novo">Nova política</a></p>
+    <AdminTable Caption="Políticas" Rows="Rows" EditBase="/admin/politicas" CanDelete="Actor.IsAdmin" OnCommand="Handle" />
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "policy")] public PolicyForm? Form { get; set; }
+    private IReadOnlyList<AdminRow> Rows = [];
+    private IReadOnlyList<AdminRow> CategoryRows = [];
+    private IReadOnlyList<NamedOption> Options = [];
+    private string? Error;
+    private ActorContext Actor => Actors.From(HttpContext.User);
+    private bool ShowForm => Id is not null || Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].EndsWith("/novo", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var posted = Form is not null;
+        Form ??= new PolicyForm();
+        var token = HttpContext.RequestAborted;
+        if (ShowForm)
+        {
+            Options = await Presidents.OptionsAsync(false, Actor, token);
+            CategoryRows = (await Categories.ListAdminAsync(Actor, token)).Items;
+            if (!posted && Id is Guid id)
+            {
+                var loaded = await Policies.GetFormAsync(id, Actor, token);
+                if (loaded is null) Error = "Política não encontrada.";
+                else Form = loaded;
+            }
+        }
+        else Rows = await Catalog.PoliciesAsync(Actor, token);
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            Form!.Id = Id;
+            var saved = await Policies.SaveAsync(Form, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo($"/admin/politicas/{saved}", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task Handle(string verb, Guid id)
+    {
+        var token = HttpContext.RequestAborted;
+        if (verb == "delete") await Policies.DeleteAsync(id, Actor, token);
+        else if (AdminCommand.ToStatus(verb) is { } status) await Publication.ChangePolicyAsync(id, status, Actor, token);
+        Rows = await Catalog.PoliciesAsync(Actor, token);
+    }
+}

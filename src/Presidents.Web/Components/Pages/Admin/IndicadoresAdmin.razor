@@ -1,0 +1,174 @@
+@page "/admin/indicadores"
+@page "/admin/indicadores/novo"
+@page "/admin/indicadores/{Id:guid}"
+@page "/admin/valores/novo"
+@page "/admin/valores/{ValueId:guid}"
+@attribute [Authorize(Policy = "Editor")]
+@layout AdminLayout
+@inject IndicatorService Indicators
+@inject AdminCatalogService Catalog
+@inject PresidentService Presidents
+@inject PublicationService Publication
+@inject NavigationManager Nav
+
+<PageTitle>Indicadores</PageTitle>
+<h1>Indicadores</h1>
+<p class="muted">Não cadastre um número sem fonte. A comparação só exibe valores publicados.</p>
+@if (!string.IsNullOrWhiteSpace(Error)) { <p class="error" role="alert">@Error</p> }
+
+@if (ValueFormMode)
+{
+    <p><a href="/admin/indicadores">Voltar aos indicadores</a></p>
+    <h2>Valor</h2>
+    <EditForm Model="ValueForm" FormName="indicator-value" OnSubmit="SaveValue" method="post">
+        <div class="form-grid">
+            <label>Presidente
+                <InputSelect @bind-Value="ValueForm.PresidentId">
+                    @foreach (var president in Options) { <option value="@president.Id">@president.Name</option> }
+                </InputSelect>
+            </label>
+            <label>Indicador
+                <InputSelect @bind-Value="ValueForm.IndicatorId">
+                    @foreach (var indicator in IndicatorRows) { <option value="@indicator.Id">@indicator.Title</option> }
+                </InputSelect>
+            </label>
+            <label>Fonte
+                <InputSelect @bind-Value="ValueForm.SourceId">
+                    @foreach (var source in SourceRows) { <option value="@source.Id">@source.Title</option> }
+                </InputSelect>
+            </label>
+            <label>Ano <InputNumber @bind-Value="ValueForm.Year" /></label>
+            <label>Valor <InputNumber @bind-Value="ValueForm.Value" /></label>
+            <label>Nota <InputText @bind-Value="ValueForm.Note" /></label>
+            <button type="submit">Salvar valor</button>
+        </div>
+    </EditForm>
+    <PublicationButtons Id="ValueId" Type="ContentEntityType.PresidentIndicator" Key="value-status" />
+}
+else if (ShowIndicatorForm)
+{
+    <p><a href="/admin/indicadores">Voltar à lista</a></p>
+    <EditForm Model="Form" FormName="indicator" OnSubmit="Save" method="post">
+        <div class="form-grid">
+            <label>Nome <InputText @bind-Value="Form.Name" /></label>
+            <label>Unidade <InputText @bind-Value="Form.Unit" /></label>
+            <label>Descrição <InputTextArea @bind-Value="Form.Description" /></label>
+            <label>Fonte da metodologia
+                <InputSelect @bind-Value="Form.MethodologySourceId">
+                    <option value="">Não informada</option>
+                    @foreach (var source in SourceRows) { <option value="@source.Id">@source.Title</option> }
+                </InputSelect>
+            </label>
+            <button type="submit">Salvar</button>
+        </div>
+    </EditForm>
+    <PublicationButtons Id="Id" Type="ContentEntityType.Indicator" Key="indicator-status" />
+}
+else
+{
+    <p class="actions">
+        <a class="button" href="/admin/indicadores/novo">Novo indicador</a>
+        <a class="button secondary" href="/admin/valores/novo">Novo valor</a>
+    </p>
+    <AdminTable Caption="Indicadores" FormName="indicators" Rows="Rows" EditBase="/admin/indicadores" CanDelete="Actor.IsAdmin" OnCommand="HandleIndicator" />
+    <h2>Valores</h2>
+    <AdminTable Caption="Valores" FormName="values" Rows="ValueRows" EditBase="/admin/valores" CanDelete="Actor.IsAdmin" OnCommand="HandleValue" />
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [Parameter] public Guid? ValueId { get; set; }
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "indicator")] public IndicatorForm? Form { get; set; }
+    [SupplyParameterFromForm(FormName = "indicator-value")] public IndicatorValueForm? ValueForm { get; set; }
+
+    private IReadOnlyList<AdminRow> Rows = [];
+    private IReadOnlyList<AdminRow> ValueRows = [];
+    private IReadOnlyList<AdminRow> IndicatorRows = [];
+    private IReadOnlyList<AdminRow> SourceRows = [];
+    private IReadOnlyList<NamedOption> Options = [];
+    private string? Error;
+    private ActorContext Actor => Actors.From(HttpContext.User);
+    private bool ValueFormMode => ValueId is not null || Nav.ToBaseRelativePath(Nav.Uri).Contains("valores/", StringComparison.OrdinalIgnoreCase);
+    private bool ShowIndicatorForm => !ValueFormMode && (Id is not null || Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].EndsWith("/novo", StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var postedIndicator = Form is not null;
+        var postedValue = ValueForm is not null;
+        Form ??= new IndicatorForm();
+        ValueForm ??= new IndicatorValueForm { Year = DateTime.UtcNow.Year };
+        var token = HttpContext.RequestAborted;
+        if (ValueFormMode)
+        {
+            Options = await Presidents.OptionsAsync(false, Actor, token);
+            IndicatorRows = await Catalog.IndicatorsAsync(Actor, token);
+            SourceRows = await Catalog.SourcesAsync(Actor, token);
+            if (!postedValue && ValueId is Guid valueId)
+            {
+                var loaded = await Indicators.GetValueFormAsync(valueId, Actor, token);
+                if (loaded is null) Error = "Valor não encontrado.";
+                else ValueForm = loaded;
+            }
+        }
+        else if (ShowIndicatorForm)
+        {
+            SourceRows = await Catalog.SourcesAsync(Actor, token);
+            if (!postedIndicator && Id is Guid id)
+            {
+                var loaded = await Indicators.GetFormAsync(id, Actor, token);
+                if (loaded is null) Error = "Indicador não encontrado.";
+                else Form = loaded;
+            }
+        }
+        else
+        {
+            Rows = await Catalog.IndicatorsAsync(Actor, token);
+            ValueRows = await Catalog.ValuesAsync(Actor, token);
+        }
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            Form!.Id = Id;
+            var saved = await Indicators.SaveAsync(Form, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo($"/admin/indicadores/{saved}", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task SaveValue()
+    {
+        try
+        {
+            ValueForm!.Id = ValueId;
+            var saved = await Indicators.SaveValueAsync(ValueForm, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo($"/admin/valores/{saved}", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task HandleIndicator(string verb, Guid id)
+    {
+        var token = HttpContext.RequestAborted;
+        if (verb == "delete") await Indicators.DeleteAsync(id, Actor, token);
+        else if (AdminCommand.ToStatus(verb) is { } status) await Publication.ChangeIndicatorAsync(id, status, Actor, token);
+        Rows = await Catalog.IndicatorsAsync(Actor, token);
+    }
+
+    private async Task HandleValue(string verb, Guid id)
+    {
+        var token = HttpContext.RequestAborted;
+        if (verb == "delete") await Indicators.DeleteValueAsync(id, Actor, token);
+        else if (AdminCommand.ToStatus(verb) is { } status) await Publication.ChangeIndicatorValueAsync(id, status, Actor, token);
+        ValueRows = await Catalog.ValuesAsync(Actor, token);
+    }
+}
