@@ -1,0 +1,158 @@
+@page "/admin/afirmacoes"
+@page "/admin/afirmacoes/novo"
+@page "/admin/afirmacoes/{Id:guid}"
+@attribute [Authorize(Policy = "Editor")]
+@layout AdminLayout
+@inject StatementService Statements
+@inject AdminCatalogService Catalog
+@inject PublicationService Publication
+@inject NavigationManager Nav
+
+<PageTitle>Afirmações</PageTitle>
+<h1>Afirmações e fontes</h1>
+<p class="muted">Opinião, crítica e interpretação exigem atribuição. Um fato documentado só pode ser publicado com fonte.</p>
+@if (!string.IsNullOrWhiteSpace(Error)) { <p class="error" role="alert">@Error</p> }
+@if (!string.IsNullOrWhiteSpace(Ok)) { <p class="banner" role="status">@Ok</p> }
+@if (ShowForm)
+{
+    <p><a href="/admin/afirmacoes">Voltar à lista</a></p>
+    <EditForm Model="Form" FormName="statement" OnSubmit="Save" method="post">
+        <div class="form-grid">
+            <label>Tipo de registro <EnumSelect T="ContentEntityType" @bind-Value="Form.EntityType" /></label>
+            <label>Identificador do registro <input name="statement.EntityId" value="@Form.EntityId" /></label>
+            <label>Natureza <EnumSelect T="StatementKind" @bind-Value="Form.Kind" /></label>
+            <label>Texto <InputTextArea @bind-Value="Form.Text" /></label>
+            <label>Atribuição <InputText @bind-Value="Form.Attribution" /></label>
+            <button type="submit">Salvar afirmação</button>
+        </div>
+    </EditForm>
+    <PublicationButtons Id="Id" Type="ContentEntityType.SourcedStatement" Key="statement-status" />
+}
+else
+{
+    <p><a class="button" href="/admin/afirmacoes/novo">Nova afirmação</a></p>
+    <AdminTable Caption="Afirmações" Rows="Rows" EditBase="/admin/afirmacoes" CanDelete="Actor.IsAdmin" OnCommand="Handle" />
+}
+
+<h2>Vincular fonte</h2>
+<EditForm Model="Link" FormName="link" OnSubmit="SaveLink" method="post">
+    <div class="form-grid">
+        <label>Fonte
+            <InputSelect @bind-Value="Link.SourceId">
+                <option value="">Selecione</option>
+                @foreach (var source in SourceRows) { <option value="@source.Id">@source.Title</option> }
+            </InputSelect>
+        </label>
+        <label>Tipo do registro <EnumSelect T="ContentEntityType" @bind-Value="Link.EntityType" /></label>
+        <label>Identificador do registro <input name="link.EntityId" value="@Link.EntityId" /></label>
+        <label>Trecho (até 400 caracteres) <InputTextArea @bind-Value="Link.Excerpt" maxlength="400" /></label>
+        <label>Anotação <InputText @bind-Value="Link.Annotation" /></label>
+        <button type="submit">Vincular</button>
+    </div>
+</EditForm>
+
+@if (Links.Count > 0)
+{
+    <form method="post" @formname="unlink" @onsubmit="UnlinkPosted">
+        <AntiforgeryToken />
+        <ul class="source-list">
+            @foreach (var link in Links)
+            {
+                <li>
+                    @(link.Source?.Name ?? "Fonte") · @EnumLabels.Any(link.EntityType) · @link.EntityId
+                    <button class="secondary" type="submit" name="unlinkId" value="@link.Id">Desvincular</button>
+                </li>
+            }
+        </ul>
+    </form>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "statement")] public StatementForm? Form { get; set; }
+    [SupplyParameterFromForm(FormName = "link")] public FactSourceForm? Link { get; set; }
+
+    private IReadOnlyList<AdminRow> Rows = [];
+    private IReadOnlyList<AdminRow> SourceRows = [];
+    private IReadOnlyList<FactSource> Links = [];
+    private string? Error;
+    private string? Ok;
+    private ActorContext Actor => Actors.From(HttpContext.User);
+    private bool ShowForm => Id is not null || Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].EndsWith("/novo", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var posted = Form is not null;
+        Form ??= new StatementForm();
+        Link ??= new FactSourceForm();
+        var token = HttpContext.RequestAborted;
+        SourceRows = await Catalog.SourcesAsync(Actor, token);
+        if (!ShowForm)
+            Rows = await Catalog.StatementsAsync(Actor, token);
+        else if (!posted && Id is Guid id)
+        {
+            var existing = (await Statements.ListAsync(Actor, null, null, token)).FirstOrDefault(item => item.Id == id);
+            if (existing is null) Error = "Afirmação não encontrada.";
+            else
+            {
+                Form = new StatementForm
+                {
+                    Id = existing.Id,
+                    EntityType = existing.EntityType,
+                    EntityId = existing.EntityId,
+                    Kind = existing.Kind,
+                    Text = existing.Text,
+                    Attribution = existing.Attribution
+                };
+            }
+        }
+        Links = await Statements.LinksAsync(Actor, null, null, token);
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            Form!.Id = Id;
+            var saved = await Statements.SaveAsync(Form, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo($"/admin/afirmacoes/{saved}", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task SaveLink()
+    {
+        try
+        {
+            await Statements.LinkSourceAsync(Link!, Actor, HttpContext.RequestAborted);
+            Ok = "Fonte vinculada. O registro continua na situação editorial em que estava.";
+            Links = await Statements.LinksAsync(Actor, null, null, HttpContext.RequestAborted);
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task UnlinkPosted()
+    {
+        var form = await HttpContext.Request.ReadFormAsync(HttpContext.RequestAborted);
+        if (!Guid.TryParse(form["unlinkId"], out var id))
+            return;
+        await Statements.UnlinkSourceAsync(id, Actor, HttpContext.RequestAborted);
+        Links = await Statements.LinksAsync(Actor, null, null, HttpContext.RequestAborted);
+        Ok = "Vínculo removido.";
+    }
+
+    private async Task Handle(string verb, Guid id)
+    {
+        var token = HttpContext.RequestAborted;
+        if (verb == "delete") await Statements.DeleteAsync(id, Actor, token);
+        else if (AdminCommand.ToStatus(verb) is { } status) await Publication.ChangeStatementAsync(id, status, Actor, token);
+        Rows = await Catalog.StatementsAsync(Actor, token);
+    }
+}

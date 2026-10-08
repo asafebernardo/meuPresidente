@@ -1,0 +1,55 @@
+@page "/areas"
+@inject QueryService Queries
+
+<Seo Title="Variação por área" Description="Variação de indicadores oficiais durante os mandatos desde a redemocratização. Os números descrevem o período e não isolam o efeito das leis." Path="/areas" />
+
+<section class="section">
+    <div class="wrap">
+        <h1>Variação por área</h1>
+        <p class="lede">@PeriodMetrics.Disclaimer</p>
+        <p>Economia e trabalho têm série oficial carregada. Saúde, educação e os demais temas têm a lista de leis; não há indicador correspondente neste acervo.</p>
+        @foreach (var area in Panels)
+        {
+            <h2>@area.Name</h2>
+            <p>@area.SeriesNote</p>
+            @if (area.Rows.Count == 0)
+            {
+                <p class="empty">Nenhuma observação publicada para esta área.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Mandato</th><th>Indicador</th><th>Variação no período</th><th>Fonte</th></tr></thead>
+                        <tbody>
+                            @foreach (var row in area.Rows)
+                            {
+                                <tr>
+                                    <td><a href="@($"/presidentes/{row.PresidentSlug}")">@row.PresidentName</a><br /><span class="muted">@row.MandateLabel</span></td>
+                                    <td>@row.Indicator</td>
+                                    <td>@row.Text</td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(row.SourceUrl))
+                                        {
+                                            <a href="@row.SourceUrl" rel="noopener noreferrer">@row.SourceName</a>
+                                        }
+                                        else
+                                        {
+                                            @row.SourceName
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            <p><a href="@($"/categorias/{area.Slug}")">Leis classificadas em @area.Name</a></p>
+        }
+    </div>
+</section>
+
+@code {
+    private IReadOnlyList<AreaPanelDto> Panels = [];
+    protected override async Task OnInitializedAsync() => Panels = await Queries.AreasAsync(CancellationToken.None);
+}

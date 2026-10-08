@@ -1,0 +1,40 @@
+@page "/busca"
+@inject QueryService Queries
+
+<Seo Title="Pesquisa" Description="Pesquisa no acervo publicado, separada por presidentes, leis, acontecimentos, políticas e fontes." Path="/busca" />
+
+<section class="section">
+    <div class="wrap">
+        <h1>Pesquisa</h1>
+        <form class="search-form" method="get" role="search">
+            <label for="q">Termo</label>
+            <input id="q" type="search" name="q" value="@Term" placeholder="Pesquise um presidente, lei, acontecimento ou tema..." />
+            <button type="submit">Pesquisar</button>
+        </form>
+        @if (Result is not null)
+        {
+            <p class="muted">@Result.Total resultado(s) publicado(s) para “@Result.Query”.</p>
+            <h2>Presidentes</h2>
+            <SearchGroup Items="Result.Presidents" />
+            <h2>Leis</h2>
+            <SearchGroup Items="Result.Laws" />
+            <h2>Acontecimentos</h2>
+            <SearchGroup Items="Result.Events" />
+            <h2>Políticas</h2>
+            <SearchGroup Items="Result.Policies" />
+            <h2>Fontes</h2>
+            <SearchGroup Items="Result.Sources" />
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Term { get; set; }
+    private SearchResponse? Result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(Term))
+            Result = await Queries.SearchAsync(Term, CancellationToken.None);
+    }
+}

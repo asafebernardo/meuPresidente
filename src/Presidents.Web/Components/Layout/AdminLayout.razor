@@ -1,0 +1,51 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+<a class="skip" href="#conteudo">Ir para o conteúdo</a>
+<header class="site-header">
+    <div class="header-inner">
+        <a class="brand" href="/admin">
+            <img src="favicon.svg" width="36" height="36" alt="" />
+            <span>
+                <strong>Acervo</strong>
+                <small>Administração</small>
+            </span>
+        </a>
+        <a href="/">Ver o site</a>
+    </div>
+</header>
+<div class="wrap admin">
+    <nav aria-label="Administração">
+        <a href="/admin" aria-current="@Current("/admin")">Painel</a>
+        <a href="/admin/presidentes" aria-current="@Current("/admin/presidentes")">Presidentes</a>
+        <a href="/admin/mandatos" aria-current="@Current("/admin/mandatos")">Mandatos</a>
+        <a href="/admin/categorias" aria-current="@Current("/admin/categorias")">Categorias</a>
+        <a href="/admin/acontecimentos" aria-current="@Current("/admin/acontecimentos")">Acontecimentos</a>
+        <a href="/admin/leis" aria-current="@Current("/admin/leis")">Leis</a>
+        <a href="/admin/politicas" aria-current="@Current("/admin/politicas")">Políticas</a>
+        <a href="/admin/indicadores" aria-current="@Current("/admin/indicadores")">Indicadores</a>
+        <a href="/admin/fontes" aria-current="@Current("/admin/fontes")">Fontes</a>
+        <a href="/admin/afirmacoes" aria-current="@Current("/admin/afirmacoes")">Afirmações</a>
+        <a href="/admin/ingestao" aria-current="@Current("/admin/ingestao")">Ingestão</a>
+        <form method="post" action="/conta/sair">
+            <AntiforgeryToken />
+            <button class="secondary" type="submit">Sair</button>
+        </form>
+    </nav>
+    <main id="conteudo">
+        @Body
+    </main>
+</div>
+
+@code {
+    private string? Current(string path)
+    {
+        var relative = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].TrimEnd('/');
+        if (path == "/admin")
+            return relative == "/admin" ? "page" : null;
+        return relative == path || relative.StartsWith(path + "/", StringComparison.Ordinal) ? "page" : null;
+    }
+}

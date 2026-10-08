@@ -1,0 +1,79 @@
+@inject PublicationService Publication
+
+@if (Id is not null)
+{
+    <div class="actions" aria-label="Situação editorial">
+        <form method="post" @formname="@($"{Key}-review")" @onsubmit="Review">
+            <AntiforgeryToken />
+            <button class="secondary" type="submit">Enviar para revisão</button>
+        </form>
+        <form method="post" @formname="@($"{Key}-publish")" @onsubmit="Publish">
+            <AntiforgeryToken />
+            <button type="submit">Publicar</button>
+        </form>
+        <form method="post" @formname="@($"{Key}-draft")" @onsubmit="Draft">
+            <AntiforgeryToken />
+            <button class="secondary" type="submit">Despublicar</button>
+        </form>
+        <form method="post" @formname="@($"{Key}-archive")" @onsubmit="Archive">
+            <AntiforgeryToken />
+            <button class="secondary" type="submit">Arquivar</button>
+        </form>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <p class="error" role="alert">@Error</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(Ok))
+    {
+        <p class="banner" role="status">@Ok</p>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid? Id { get; set; }
+    [Parameter, EditorRequired] public ContentEntityType Type { get; set; }
+    [Parameter] public string Key { get; set; } = "status";
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+
+    private string? Error;
+    private string? Ok;
+
+    private Task Review() => Change(PublicationStatus.Review);
+    private Task Publish() => Change(PublicationStatus.Published);
+    private Task Draft() => Change(PublicationStatus.Draft);
+    private Task Archive() => Change(PublicationStatus.Archived);
+
+    private async Task Change(PublicationStatus status)
+    {
+        if (Id is not Guid id)
+            return;
+        try
+        {
+            var actor = Actors.From(HttpContext.User);
+            var token = HttpContext.RequestAborted;
+            Task call = Type switch
+            {
+                ContentEntityType.President => Publication.ChangePresidentAsync(id, status, actor, token),
+                ContentEntityType.Presidency => Publication.ChangePresidencyAsync(id, status, actor, token),
+                ContentEntityType.HistoricalEvent => Publication.ChangeEventAsync(id, status, actor, token),
+                ContentEntityType.Law => Publication.ChangeLawAsync(id, status, actor, token),
+                ContentEntityType.Policy => Publication.ChangePolicyAsync(id, status, actor, token),
+                ContentEntityType.Source => Publication.ChangeSourceAsync(id, status, actor, token),
+                ContentEntityType.Category => Publication.ChangeCategoryAsync(id, status, actor, token),
+                ContentEntityType.Indicator => Publication.ChangeIndicatorAsync(id, status, actor, token),
+                ContentEntityType.PresidentIndicator => Publication.ChangeIndicatorValueAsync(id, status, actor, token),
+                ContentEntityType.SourcedStatement => Publication.ChangeStatementAsync(id, status, actor, token),
+                _ => throw new DomainException("Este tipo de registro não possui fluxo de publicação.")
+            };
+            await call;
+            Ok = "Situação atualizada.";
+            Error = null;
+        }
+        catch (Exception exception) when (exception is DomainException or ForbiddenException)
+        {
+            Error = Ui.Message(exception);
+            Ok = null;
+        }
+    }
+}

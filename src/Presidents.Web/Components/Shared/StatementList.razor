@@ -1,0 +1,23 @@
+@if (Items.Count == 0)
+{
+    <p class="empty">Nenhuma afirmação publicada neste grupo.</p>
+}
+else
+{
+    @foreach (var statement in Items)
+    {
+        <article class="card">
+            <p><span class="kind @Ui.KindClass(statement.Kind)">@statement.Kind</span></p>
+            <p>@statement.Text</p>
+            @if (!string.IsNullOrWhiteSpace(statement.Attribution))
+            {
+                <p class="muted">Atribuição: @statement.Attribution</p>
+            }
+            <Sources Items="statement.Sources" />
+        </article>
+    }
+}
+
+@code {
+    [Parameter] public IReadOnlyList<StatementDto> Items { get; set; } = [];
+}

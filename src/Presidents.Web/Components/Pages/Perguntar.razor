@@ -1,0 +1,59 @@
+@page "/perguntar"
+@inject IHistoricalAnswerService Answers
+@inject ILlmClient Llm
+
+<Seo Title="Perguntar ao acervo" Description="Perguntas respondidas apenas com afirmações e fontes já publicadas no banco." Path="/perguntar" />
+
+<section class="section">
+    <div class="wrap">
+        <h1>Perguntar ao acervo</h1>
+        <p class="lede">A resposta usa registros publicados. Se não houver fonte suficiente, o sistema não completa a lacuna.</p>
+        <p class="muted">@(Llm.IsEnabled ? "Um modelo de linguagem pode selecionar, entre as fontes recuperadas, quais entram na resposta. O texto exibido continua sendo o das afirmações armazenadas." : "Nenhuma chave de modelo está configurada. A resposta lista as afirmações recuperadas no banco.")</p>
+        <form class="search-form" method="get">
+            <label for="q">Pergunta</label>
+            <input id="q" type="search" name="q" value="@Question" />
+            <button type="submit">Perguntar</button>
+        </form>
+        @if (Answer is not null)
+        {
+            <article class="panel">
+                <p>@Answer.Text</p>
+                @if (Answer.Citations.Count > 0)
+                {
+                    <h2>Fontes utilizadas</h2>
+                    <ul class="source-list">
+                        @foreach (var citation in Answer.Citations)
+                        {
+                            <li>
+                                <p>@citation.Statement</p>
+                                <p>
+                                    <strong>@citation.SourceName</strong>
+                                    · @citation.Reliability
+                                    @if (citation.Date is not null)
+                                    {
+                                        <span> · @Ui.Date(citation.Date)</span>
+                                    }
+                                </p>
+                                @if (!string.IsNullOrWhiteSpace(citation.Url))
+                                {
+                                    <a href="@citation.Url" rel="noopener noreferrer">Abrir fonte original</a>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </article>
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Question { get; set; }
+    private HistoricalAnswer? Answer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(Question))
+            Answer = await Answers.AnswerAsync(Question, CancellationToken.None);
+    }
+}

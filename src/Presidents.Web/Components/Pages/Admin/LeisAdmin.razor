@@ -1,0 +1,113 @@
+@page "/admin/leis"
+@page "/admin/leis/novo"
+@page "/admin/leis/{Id:guid}"
+@attribute [Authorize(Policy = "Editor")]
+@layout AdminLayout
+@inject LawService Laws
+@inject AdminCatalogService Catalog
+@inject PresidentService Presidents
+@inject CategoryService Categories
+@inject PublicationService Publication
+@inject NavigationManager Nav
+
+<PageTitle>Leis</PageTitle>
+<h1>Leis</h1>
+<p class="muted">Marcar autoria exige o proponente. O presidente em exercício não recebe autoria automaticamente.</p>
+@if (!string.IsNullOrWhiteSpace(Error)) { <p class="error" role="alert">@Error</p> }
+@if (ShowForm)
+{
+    <p><a href="/admin/leis">Voltar à lista</a></p>
+    <EditForm Model="Form" FormName="statute" OnSubmit="Save" method="post">
+        <div class="form-grid">
+            <label>Número <InputText @bind-Value="Form.Number" /></label>
+            <label>Ano <InputNumber @bind-Value="Form.Year" /></label>
+            <label>Tipo <EnumSelect T="NormKind" @bind-Value="Form.Kind" /></label>
+            <label>Título ou ementa <InputText @bind-Value="Form.Title" /></label>
+            <label>Endereço <InputText @bind-Value="Form.Slug" /></label>
+            <label>Resumo próprio <InputTextArea @bind-Value="Form.Summary" /></label>
+            <label>URL do texto oficial <InputText @bind-Value="Form.FullTextUrl" /></label>
+            <label>Origem <EnumSelect T="NormOrigin" @bind-Value="Form.Origin" /></label>
+            <label>Situação <EnumSelect T="LawOperationalStatus" @bind-Value="Form.OperationalStatus" /></label>
+            <label>Sanção <InputDate @bind-Value="Form.SanctionDate" /></label>
+            <label>Promulgação <InputDate @bind-Value="Form.PromulgationDate" /></label>
+            <label>Publicação <InputDate @bind-Value="Form.PublicationDate" /></label>
+            <label>Vigência <InputDate @bind-Value="Form.EffectiveDate" /></label>
+            <label>Veto <InputDate @bind-Value="Form.VetoDate" /></label>
+            <label>Proponente <InputText @bind-Value="Form.Proposer" /></label>
+            <label><InputCheckbox @bind-Value="Form.AttributeAuthorship" /> Registrar autoria do proponente</label>
+            <label>Presidente em exercício
+                <InputSelect @bind-Value="Form.PresidentInOfficeId">
+                    <option value="">Não informado</option>
+                    @foreach (var president in Options) { <option value="@president.Id">@president.Name</option> }
+                </InputSelect>
+            </label>
+            <label>Tramitação <InputTextArea @bind-Value="Form.LegislativeProcessNote" /></label>
+            <label>Nota de veto <InputTextArea @bind-Value="Form.VetoNote" /></label>
+            <label>Divergência <InputTextArea @bind-Value="Form.DivergenceNote" /></label>
+            <fieldset>
+                <legend>Categorias</legend>
+                <CategoryChecks FormName="statute" Categories="CategoryRows" Selected="Form.CategoryIds" />
+            </fieldset>
+            <button type="submit">Salvar</button>
+        </div>
+    </EditForm>
+    <PublicationButtons Id="Id" Type="ContentEntityType.Law" Key="law-status" />
+}
+else
+{
+    <p><a class="button" href="/admin/leis/novo">Nova lei</a></p>
+    <AdminTable Caption="Leis" Rows="Rows" EditBase="/admin/leis" CanDelete="Actor.IsAdmin" OnCommand="Handle" />
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "statute")] public LawForm? Form { get; set; }
+    private IReadOnlyList<AdminRow> Rows = [];
+    private IReadOnlyList<AdminRow> CategoryRows = [];
+    private IReadOnlyList<NamedOption> Options = [];
+    private string? Error;
+    private ActorContext Actor => Actors.From(HttpContext.User);
+    private bool ShowForm => Id is not null || Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].EndsWith("/novo", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var posted = Form is not null;
+        Form ??= new LawForm { Year = DateTime.UtcNow.Year };
+        var token = HttpContext.RequestAborted;
+        if (ShowForm)
+        {
+            Options = await Presidents.OptionsAsync(false, Actor, token);
+            CategoryRows = (await Categories.ListAdminAsync(Actor, token)).Items;
+            if (!posted && Id is Guid id)
+            {
+                var loaded = await Laws.GetFormAsync(id, Actor, token);
+                if (loaded is null) Error = "Lei não encontrada.";
+                else Form = loaded;
+            }
+        }
+        else Rows = await Catalog.LawsAsync(Actor, token);
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            Form!.Id = Id;
+            var saved = await Laws.SaveAsync(Form, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo($"/admin/leis/{saved}", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task Handle(string verb, Guid id)
+    {
+        var token = HttpContext.RequestAborted;
+        if (verb == "delete") await Laws.DeleteAsync(id, Actor, token);
+        else if (AdminCommand.ToStatus(verb) is { } status) await Publication.ChangeLawAsync(id, status, Actor, token);
+        Rows = await Catalog.LawsAsync(Actor, token);
+    }
+}

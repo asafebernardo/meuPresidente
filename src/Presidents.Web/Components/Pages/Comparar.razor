@@ -1,0 +1,109 @@
+@page "/comparar"
+@inject QueryService Queries
+@inject PresidentService Presidents
+
+<Seo Title="Comparar presidentes" Description="Comparação lado a lado de mandatos, contagens e indicadores publicados, sem ranking." Path="/comparar" />
+
+<section class="section">
+    <div class="wrap">
+        <h1>Comparar</h1>
+        <p class="lede">Selecione até quatro presidentes. A página organiza os dados publicados; ela não classifica governos.</p>
+        <form class="filter-form" method="get">
+            @for (var slot = 0; slot < 4; slot++)
+            {
+                var index = slot;
+                <label>Presidente @(index + 1)
+                    <select name="p">
+                        <option value="">Nenhum</option>
+                        @foreach (var president in Options)
+                        {
+                            <option value="@president.Slug" selected="@(Chosen.ElementAtOrDefault(index) == president.Slug)">@president.FullName</option>
+                        }
+                    </select>
+                </label>
+            }
+            <button type="submit">Comparar</button>
+        </form>
+        @if (!string.IsNullOrWhiteSpace(Error))
+        {
+            <p class="error" role="alert">@Error</p>
+        }
+        @if (Result is not null)
+        {
+            <p class="banner">@Result.Disclaimer</p>
+            @if (Result.Columns.Count == 0)
+            {
+                <p class="empty">Nenhum presidente publicado foi encontrado para a seleção.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <caption>Dados publicados lado a lado</caption>
+                        <thead>
+                            <tr>
+                                <th>Campo</th>
+                                @foreach (var column in Result.Columns)
+                                {
+                                    <th><a href="@($"/presidentes/{column.Slug}")">@column.Name</a></th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><th>Mandato</th>@foreach (var column in Result.Columns) { <td>@column.Mandate</td> }</tr>
+                            <tr><th>Partido</th>@foreach (var column in Result.Columns) { <td>@(column.Party ?? "não informado")</td> }</tr>
+                            <tr><th>Vice-presidente</th>@foreach (var column in Result.Columns) { <td>@(column.VicePresident ?? "não informado")</td> }</tr>
+                            <tr><th>Leis catalogadas</th>@foreach (var column in Result.Columns) { <td>@column.LawCount</td> }</tr>
+                            <tr><th>Acontecimentos</th>@foreach (var column in Result.Columns) { <td>@column.EventCount</td> }</tr>
+                            <tr><th>Políticas públicas</th>@foreach (var column in Result.Columns) { <td>@column.PolicyCount</td> }</tr>
+                            @foreach (var row in Result.Indicators)
+                            {
+                                <tr>
+                                    <th>@row.Indicator (@row.Unit)</th>
+                                    @foreach (var value in row.Values)
+                                    {
+                                        <td>@value</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <h2>Gráficos</h2>
+                @if (Result.Charts.Count == 0)
+                {
+                    <p class="empty">Não há série de indicador publicada para os presidentes selecionados.</p>
+                }
+                @foreach (var chart in Result.Charts)
+                {
+                    <ChartPanel Series="chart" Names="Result.Columns.Select(column => column.Name).ToList()" />
+                }
+            }
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "p")] public string[]? Selected { get; set; }
+    private IReadOnlyList<PresidentListItemDto> Options = [];
+    private IReadOnlyList<string> Chosen = [];
+    private ComparisonResult? Result;
+    private string? Error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var page = await Presidents.ListPublicAsync(null, 1, 100, CancellationToken.None);
+        Options = page.Items;
+        Chosen = Selected?.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase).Take(4).ToList() ?? [];
+        if (Chosen.Count == 0)
+            return;
+        try
+        {
+            Result = await Queries.CompareAsync(Chosen, CancellationToken.None);
+        }
+        catch (DomainException exception)
+        {
+            Error = exception.Message;
+        }
+    }
+}

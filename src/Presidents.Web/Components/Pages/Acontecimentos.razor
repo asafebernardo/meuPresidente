@@ -1,0 +1,87 @@
+@page "/acontecimentos"
+@inject QueryService Queries
+@inject PresidentService Presidents
+@inject CategoryService Categories
+
+<Seo Title="Acontecimentos" Description="Acontecimentos históricos publicados, com data, categoria e fontes." Path="/acontecimentos" />
+
+<section class="section">
+    <div class="wrap">
+        <h1>Acontecimentos</h1>
+        <form class="filter-form" method="get">
+            <label>Pesquisa <input type="search" name="q" value="@Term" /></label>
+            <label>Presidente
+                <select name="presidente">
+                    <option value="">Todos</option>
+                    @foreach (var president in PresidentOptions)
+                    {
+                        <option value="@president.Id" selected="@(PresidentText == president.Id.ToString())">@president.Name</option>
+                    }
+                </select>
+            </label>
+            <label>Categoria
+                <select name="categoria">
+                    <option value="">Todas</option>
+                    @foreach (var category in CategoryOptions)
+                    {
+                        <option value="@category.Id" selected="@(CategoryText == category.Id.ToString())">@category.Name</option>
+                    }
+                </select>
+            </label>
+            <label>Tipo
+                <select name="tipo">
+                    <option value="">Todos</option>
+                    @foreach (var type in Enum.GetValues<EventType>())
+                    {
+                        <option value="@type" selected="@(TypeText == type.ToString())">@EnumLabels.For(type)</option>
+                    }
+                </select>
+            </label>
+            <label>Ano <input type="number" name="ano" value="@YearText" /></label>
+            <button type="submit">Filtrar</button>
+        </form>
+        @if (Page is not null)
+        {
+            @foreach (var ev in Page.Items)
+            {
+                <FactCard Title="@ev.Title" Href="@($"/acontecimentos/{ev.Slug}")" Date="@ev.EventDate" Kind="@ev.SummaryKind" Summary="@(ev.NeutralSummary ?? ev.Description)" Divergence="@ev.DivergenceNote" Demonstration="@ev.Demonstration" Categories="@ev.Categories" Sources="@ev.Sources" />
+            }
+            @if (Page.Items.Count == 0)
+            {
+                <p class="empty">Nenhum acontecimento publicado corresponde aos filtros.</p>
+            }
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Term { get; set; }
+    [SupplyParameterFromQuery(Name = "presidente")] public string? PresidentText { get; set; }
+    [SupplyParameterFromQuery(Name = "categoria")] public string? CategoryText { get; set; }
+    [SupplyParameterFromQuery(Name = "tipo")] public string? TypeText { get; set; }
+    [SupplyParameterFromQuery(Name = "ano")] public string? YearText { get; set; }
+
+    private Guid? PresidentId => Guid.TryParse(PresidentText, out var id) ? id : null;
+    private Guid? CategoryId => Guid.TryParse(CategoryText, out var id) ? id : null;
+    private EventType? Type => Enum.TryParse<EventType>(TypeText, out var type) ? type : null;
+    private int? Year => int.TryParse(YearText, out var year) ? year : null;
+    private PagedResult<EventCardDto>? Page;
+    private IReadOnlyList<NamedOption> PresidentOptions = [];
+    private IReadOnlyList<Category> CategoryOptions = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        PresidentOptions = await Presidents.OptionsAsync(true, null, CancellationToken.None);
+        CategoryOptions = await Categories.ListPublicAsync(CancellationToken.None);
+        Page = await Queries.EventsAsync(new EventQuery
+        {
+            Term = Term,
+            PresidentId = PresidentId,
+            CategoryId = CategoryId,
+            EventType = Type,
+            Year = Year,
+            Page = 1,
+            PageSize = 50
+        }, CancellationToken.None);
+    }
+}

@@ -1,0 +1,45 @@
+@page "/presidentes"
+@inject PresidentService Presidents
+
+<Seo Title="Presidentes" Description="Lista de presidentes com mandato, partido e vínculo para a página de cada período publicado." Path="/presidentes" />
+
+<section class="section">
+    <div class="wrap">
+        <h1>Presidentes</h1>
+        <p class="lede">Cada página reúne as leis assinadas no período e a variação dos indicadores oficiais. Registros anteriores a 1985 podem ser semente de demonstração.</p>
+        <form class="search-form" method="get">
+            <label for="q">Nome</label>
+            <input id="q" type="search" name="q" value="@Term" />
+            <button type="submit">Filtrar</button>
+        </form>
+        <div class="grid cards-3">
+            @if (Page is not null)
+            {
+                @foreach (var president in Page.Items)
+                {
+                    <article class="card">
+                        <h2><a href="@($"/presidentes/{president.Slug}")">@president.FullName</a></h2>
+                        <p>@president.Mandate</p>
+                        <p class="muted">@(president.Party ?? "Partido não informado") · Vice: @(president.VicePresident ?? "não informado")</p>
+                        @if (president.Demonstration)
+                        {
+                            <p class="badge">demonstração</p>
+                        }
+                    </article>
+                }
+                @if (Page.Items.Count == 0)
+                {
+                    <p class="empty">Nenhum presidente publicado corresponde à pesquisa.</p>
+                }
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Term { get; set; }
+    private PagedResult<PresidentListItemDto>? Page;
+
+    protected override async Task OnInitializedAsync() =>
+        Page = await Presidents.ListPublicAsync(Term, 1, 100, CancellationToken.None);
+}

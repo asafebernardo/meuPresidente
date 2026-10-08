@@ -1,0 +1,138 @@
+@page "/leis"
+@inject QueryService Queries
+@inject PresidentService Presidents
+@inject CategoryService Categories
+
+<Seo Title="Leis" Description="Atos normativos catalogados, com filtros por presidente em exercício, período, tipo, categoria, ano e situação." Path="/leis" />
+
+<section class="section">
+    <div class="wrap">
+        <h1>Leis</h1>
+        <p class="lede">A lista abre em 15/03/1985. O filtro por presidente indica quem estava em exercício na data de assinatura. Isso não atribui autoria. O tema, quando aparece, veio de palavras da ementa.</p>
+        <form class="filter-form" method="get">
+            <label>Pesquisa <input type="search" name="q" value="@Term" /></label>
+            <label>Presidente em exercício
+                <select name="presidente">
+                    <option value="">Todos</option>
+                    @foreach (var president in PresidentOptions)
+                    {
+                        <option value="@president.Id" selected="@(PresidentText == president.Id.ToString())">@president.Name</option>
+                    }
+                </select>
+            </label>
+            <label>Categoria
+                <select name="categoria">
+                    <option value="">Todas</option>
+                    @foreach (var category in CategoryOptions)
+                    {
+                        <option value="@category.Id" selected="@(CategoryText == category.Id.ToString())">@category.Name</option>
+                    }
+                </select>
+            </label>
+            <label>Tipo
+                <select name="tipo">
+                    <option value="">Todos</option>
+                    @foreach (var kind in Enum.GetValues<NormKind>())
+                    {
+                        <option value="@kind" selected="@(KindText == kind.ToString())">@EnumLabels.For(kind)</option>
+                    }
+                </select>
+            </label>
+            <label>Situação
+                <select name="status">
+                    <option value="">Todas</option>
+                    @foreach (var status in Enum.GetValues<LawOperationalStatus>())
+                    {
+                        <option value="@status" selected="@(StatusText == status.ToString())">@EnumLabels.For(status)</option>
+                    }
+                </select>
+            </label>
+            <label>Ano <input type="number" name="ano" value="@YearText" min="1800" max="2100" /></label>
+            <label>De <input type="date" name="de" value="@FromInput" /></label>
+            <label>Até <input type="date" name="ate" value="@ToText" /></label>
+            <button type="submit">Filtrar</button>
+        </form>
+        @if (Page is not null)
+        {
+            <p class="muted">@Page.TotalCount registro(s) publicado(s).</p>
+            <div class="facts">
+                @foreach (var law in Page.Items)
+                {
+                    <article class="card">
+                        <p><span class="badge">@law.Kind</span> <span class="badge">@law.Number/@law.Year</span> <span class="badge">@law.OperationalStatus</span></p>
+                        <h2><a href="@($"/leis/{law.Slug}")">@law.Title</a></h2>
+                        <p>@(law.Summary is { Length: > 320 } ? law.Summary[..317].TrimEnd() + "…" : law.Summary)</p>
+                        <p class="muted">@Ui.Date(law.SanctionDate) · @(law.Categories.Count > 0 ? string.Join(", ", law.Categories) : "Tema não identificado") · Presidente em exercício: @(law.PresidentInOffice ?? "não informado")</p>
+                    </article>
+                }
+                @if (Page.Items.Count == 0)
+                {
+                    <p class="empty">Nenhuma lei publicada corresponde aos filtros.</p>
+                }
+            </div>
+            <p class="muted"><a href="/leis?de=1800-01-01">Incluir atos anteriores a 15/03/1985</a></p>
+            <p class="actions">
+                @if (PageNumber > 1)
+                {
+                    <a class="button secondary" href="@PageLink(PageNumber - 1)">Anterior</a>
+                }
+                @if (Page.Page * Page.PageSize < Page.TotalCount)
+                {
+                    <a class="button secondary" href="@PageLink(PageNumber + 1)">Próxima</a>
+                }
+            </p>
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Term { get; set; }
+    [SupplyParameterFromQuery(Name = "presidente")] public string? PresidentText { get; set; }
+    [SupplyParameterFromQuery(Name = "categoria")] public string? CategoryText { get; set; }
+    [SupplyParameterFromQuery(Name = "ano")] public string? YearText { get; set; }
+    [SupplyParameterFromQuery(Name = "tipo")] public string? KindText { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] public string? StatusText { get; set; }
+    [SupplyParameterFromQuery(Name = "de")] public string? FromText { get; set; }
+    [SupplyParameterFromQuery(Name = "ate")] public string? ToText { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public string? PageText { get; set; }
+
+    private Guid? PresidentId => Guid.TryParse(PresidentText, out var id) ? id : null;
+    private Guid? CategoryId => Guid.TryParse(CategoryText, out var id) ? id : null;
+    private int? Year => int.TryParse(YearText, out var year) ? year : null;
+    private NormKind? Kind => Enum.TryParse<NormKind>(KindText, out var kind) ? kind : null;
+    private LawOperationalStatus? Status => Enum.TryParse<LawOperationalStatus>(StatusText, out var status) ? status : null;
+    private DateOnly? From => DateOnly.TryParse(FromText, out var date) ? date : FromText is null ? new DateOnly(1985, 3, 15) : null;
+    private string FromInput => string.IsNullOrEmpty(FromText) ? "1985-03-15" : FromText;
+    private DateOnly? To => DateOnly.TryParse(ToText, out var date) ? date : null;
+    private int PageNumber => int.TryParse(PageText, out var page) && page > 0 ? page : 1;
+
+    private PagedResult<LawCardDto>? Page;
+    private IReadOnlyList<NamedOption> PresidentOptions = [];
+    private IReadOnlyList<Category> CategoryOptions = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        PresidentOptions = await Presidents.OptionsAsync(true, null, CancellationToken.None);
+        CategoryOptions = await Categories.ListPublicAsync(CancellationToken.None);
+        Page = await Queries.LawsAsync(new LawQuery
+        {
+            Term = Term,
+            PresidentId = PresidentId,
+            CategoryId = CategoryId,
+            Year = Year,
+            Kind = Kind,
+            OperationalStatus = Status,
+            From = From,
+            To = To,
+            Page = PageNumber,
+            PageSize = 20
+        }, CancellationToken.None);
+    }
+
+    private string PageLink(int page) => Ui.WithQuery("/leis",
+    [
+        new("q", Term), new("presidente", PresidentId?.ToString()), new("categoria", CategoryId?.ToString()),
+        new("ano", Year?.ToString()), new("tipo", Kind?.ToString()), new("status", Status?.ToString()),
+        new("de", From?.ToString("yyyy-MM-dd")), new("ate", To?.ToString("yyyy-MM-dd")), new("page", page.ToString())
+    ]);
+}

@@ -1,0 +1,158 @@
+﻿@page "/"
+@inject QueryService Queries
+@inject IConfiguration Configuration
+
+<Seo Title="Leis da Nova República" Description="Leis federais sancionadas desde 15 de março de 1985, separadas por tema, com a variação de indicadores oficiais em cada área." Path="/" JsonLd="@JsonLd" />
+
+<section class="hero">
+    <div class="wrap">
+        <p class="eyebrow">Desde 15 de março de 1985</p>
+        <h1>Leis sancionadas desde a redemocratização</h1>
+        <p class="lede">Resumo de cada lei federal assinada a partir do fim da ditadura militar, separado por tema, com a variação de indicadores oficiais em cada área.</p>
+        <form class="search-form" method="get" action="/busca" role="search">
+            <label class="visually-hidden" for="q">Pesquisa</label>
+            <input id="q" type="search" name="q" placeholder="Pesquise uma lei, um tema ou um presidente..." />
+            <button type="submit">Pesquisar</button>
+        </form>
+    </div>
+</section>
+
+@if (Page is not null)
+{
+    <section class="section">
+        <div class="wrap">
+            <p class="banner">O tema de cada lei é uma classificação automática pelas palavras da ementa oficial. Não é o índice do Senado. O presidente indicado é quem estava em exercício na data de assinatura, sem que isso seja autoria. @PeriodMetrics.Disclaimer</p>
+            <div class="section-head">
+                <h2>Leis por tema</h2>
+                <a href="/leis?de=1985-03-15">@Page.LawsSinceRedemocratization.ToString("N0") leis na lista</a>
+            </div>
+            <div class="grid cards-4">
+                @foreach (var topic in Page.Topics)
+                {
+                    <a class="card" href="@($"/categorias/{topic.Slug}")">
+                        <p class="topic-count">@topic.LawCount.ToString("N0")</p>
+                        <strong>@topic.Name</strong>
+                    </a>
+                }
+                @if (Page.Topics.Count == 0)
+                {
+                    <p class="empty">O catálogo de leis ainda não foi carregado.</p>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="wrap">
+            <div class="section-head">
+                <h2>Variação por área</h2>
+                <a href="/areas">Ver as séries</a>
+            </div>
+            <p class="muted">Há série oficial carregada para economia e trabalho. Nos demais temas, o acervo mostra a lista de leis e informa que não há indicador correspondente.</p>
+            @foreach (var area in Page.Areas)
+            {
+                <h3>@area.Name</h3>
+                <p>@area.SeriesNote</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Mandato</th><th>Indicador</th><th>Variação no período</th><th>Fonte</th></tr></thead>
+                        <tbody>
+                            @foreach (var row in area.Rows)
+                            {
+                                <tr>
+                                    <td><a href="@($"/presidentes/{row.PresidentSlug}")">@row.PresidentName</a><br /><span class="muted">@row.MandateLabel</span></td>
+                                    <td>@row.Indicator</td>
+                                    <td>@row.Text</td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(row.SourceUrl))
+                                        {
+                                            <a href="@row.SourceUrl" rel="noopener noreferrer">@row.SourceName</a>
+                                        }
+                                        else
+                                        {
+                                            @row.SourceName
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="wrap">
+            <div class="section-head">
+                <h2>Quem estava em exercício</h2>
+                <a href="/presidentes">Todos os presidentes</a>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Presidente</th><th>Períodos</th><th>Leis com assinatura no período</th></tr></thead>
+                    <tbody>
+                        @foreach (var share in Page.LawShares)
+                        {
+                            <tr>
+                                <td><a href="@($"/presidentes/{share.Slug}")">@share.Name</a></td>
+                                <td>@share.Mandate</td>
+                                <td><a href="@($"/leis?presidente={share.Id}&de=1985-03-15")">@share.LawCount.ToString("N0")</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="muted">A contagem liga a lei ao presidente em exercício na data de assinatura. Leis de 15/03/1985 a 20/04/1985 ficam sem presidente: a fonte usada registra a assunção de José Sarney em 21/04/1985.</p>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="wrap">
+            <div class="section-head">
+                <h2>Assinaturas recentes</h2>
+                <a href="/leis?de=1985-03-15">Catálogo completo</a>
+            </div>
+            <div class="facts">
+                @foreach (var law in Page.Laws)
+                {
+                    <article class="card">
+                        <p><span class="badge">@law.Kind</span> <span class="badge">@law.Number/@law.Year</span> @if (law.SanctionDate is { } date) { <span class="badge">@date.ToString("dd/MM/yyyy")</span> }</p>
+                        <h3><a href="@($"/leis/{law.Slug}")">@law.Title</a></h3>
+                        <p>@Excerpt(law.Summary)</p>
+                        <p class="muted">@(law.Categories.Count > 0 ? string.Join(", ", law.Categories) : "Tema não identificado") · @(law.PresidentInOffice ?? "presidente em exercício não informado")</p>
+                    </article>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    private HomePageDto? Page;
+    private string JsonLd => Ui.Json(new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "WebSite",
+        ["name"] = "História dos Presidentes",
+        ["url"] = Canonical,
+        ["description"] = "Leis federais sancionadas desde 15 de março de 1985, separadas por tema, com indicadores oficiais.",
+        ["potentialAction"] = new Dictionary<string, object?>
+        {
+            ["@type"] = "SearchAction",
+            ["target"] = Canonical + "/busca?q={query}",
+            ["query-input"] = "required name=query"
+        }
+    });
+
+    private string Canonical => (Configuration["Public:CanonicalBaseUrl"] ?? "http://localhost:5088").TrimEnd('/');
+
+    private static string Excerpt(string? summary)
+    {
+        if (string.IsNullOrWhiteSpace(summary))
+            return "";
+        return summary.Length <= 280 ? summary : summary[..277].TrimEnd() + "…";
+    }
+
+    protected override async Task OnInitializedAsync() => Page = await Queries.HomeAsync(CancellationToken.None);
+}

@@ -1,0 +1,51 @@
+<article class="card">
+    <p>
+        @if (Date is not null)
+        {
+            <span class="badge">@Ui.Date(Date)</span>
+        }
+        @foreach (var category in Categories)
+        {
+            <span class="badge">@category</span>
+        }
+        @if (!string.IsNullOrWhiteSpace(Kind))
+        {
+            <span class="kind @Ui.KindClass(Kind)">@Kind</span>
+        }
+        @if (Demonstration)
+        {
+            <span class="badge">demonstração</span>
+        }
+    </p>
+    <h3>
+        @if (!string.IsNullOrWhiteSpace(Href))
+        {
+            <a href="@Href">@Title</a>
+        }
+        else
+        {
+            @Title
+        }
+    </h3>
+    @if (!string.IsNullOrWhiteSpace(Summary))
+    {
+        <p>@Summary</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(Divergence))
+    {
+        <p class="banner">Há divergência registrada entre as fontes: @Divergence</p>
+    }
+    <Sources Items="Sources" />
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public DateOnly? Date { get; set; }
+    [Parameter] public string? Kind { get; set; }
+    [Parameter] public string? Summary { get; set; }
+    [Parameter] public string? Divergence { get; set; }
+    [Parameter] public bool Demonstration { get; set; }
+    [Parameter] public IReadOnlyList<string> Categories { get; set; } = [];
+    [Parameter] public IReadOnlyList<SourceCitationDto> Sources { get; set; } = [];
+}

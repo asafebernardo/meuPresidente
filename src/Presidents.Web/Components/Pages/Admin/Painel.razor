@@ -1,0 +1,30 @@
+@page "/admin"
+@attribute [Authorize(Policy = "Editor")]
+@layout AdminLayout
+@inject QueryService Queries
+
+<PageTitle>Painel</PageTitle>
+<h1>Painel</h1>
+<p>Conteúdo publicado e rascunhos do acervo. A publicação de um registro histórico exige ao menos uma fonte publicada.</p>
+@if (Stats is not null)
+{
+    <div class="grid cards-4">
+        <article class="card"><p class="stat">@Stats.Presidents</p><p>Presidentes</p></article>
+        <article class="card"><p class="stat">@Stats.Presidencies</p><p>Mandatos</p></article>
+        <article class="card"><p class="stat">@Stats.Events</p><p>Acontecimentos</p></article>
+        <article class="card"><p class="stat">@Stats.Laws</p><p>Leis</p></article>
+        <article class="card"><p class="stat">@Stats.Policies</p><p>Políticas</p></article>
+        <article class="card"><p class="stat">@Stats.Indicators</p><p>Indicadores</p></article>
+        <article class="card"><p class="stat">@Stats.Categories</p><p>Categorias</p></article>
+        <article class="card"><p class="stat">@Stats.Sources</p><p>Fontes</p></article>
+        <article class="card"><p class="stat">@Stats.Drafts</p><p>Rascunhos</p></article>
+    </div>
+}
+
+@code {
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    private AdminStatsDto? Stats;
+
+    protected override async Task OnInitializedAsync() =>
+        Stats = await Queries.AdminStatsAsync(Actors.From(HttpContext.User), HttpContext.RequestAborted);
+}

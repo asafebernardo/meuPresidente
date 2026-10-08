@@ -1,0 +1,46 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Nav
+
+<a class="skip" href="#conteudo">Ir para o conteúdo</a>
+<header class="site-header">
+    <div class="header-inner">
+        <a class="brand" href="/">
+            <img src="favicon.svg" width="36" height="36" alt="" />
+            <span>
+                <strong>História dos Presidentes</strong>
+                <small>Leis e indicadores</small>
+            </span>
+        </a>
+        <nav class="nav" aria-label="Principal">
+            <details class="nav-menu">
+                <summary>Menu</summary>
+                <div class="nav-links">
+                    <a href="/leis" aria-current="@Current("/leis")">Leis</a>
+                    <a href="/categorias" aria-current="@Current("/categorias")">Temas</a>
+                    <a href="/areas" aria-current="@Current("/areas")">Áreas</a>
+                    <a href="/presidentes" aria-current="@Current("/presidentes")">Presidentes</a>
+                    <a href="/sobre" aria-current="@Current("/sobre")">Sobre</a>
+                </div>
+            </details>
+        </nav>
+    </div>
+</header>
+<main id="conteudo">
+    @Body
+</main>
+<footer class="site-footer">
+    <div class="footer-inner">
+        <p>Conteúdo público limitado a registros publicados. Cada afirmação histórica relevante permanece ligada às suas fontes.</p>
+        <p><a href="/linha-do-tempo">Linha do tempo</a> · <a href="/comparar">Comparar</a> · <a href="/acontecimentos">Acontecimentos</a> · <a href="/perguntar">Perguntar ao acervo</a> · <a href="/admin">Administração</a></p>
+    </div>
+</footer>
+
+@code {
+    private string? Current(string path)
+    {
+        var relative = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].TrimEnd('/');
+        if (string.IsNullOrEmpty(relative))
+            relative = "/";
+        return relative == path || relative.StartsWith(path + "/", StringComparison.Ordinal) ? "page" : null;
+    }
+}

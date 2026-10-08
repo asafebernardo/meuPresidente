@@ -1,0 +1,67 @@
+@page "/acontecimentos/{Slug}"
+@inject QueryService Queries
+
+@if (Missing)
+{
+    <Seo Title="Acontecimento não encontrado" Description="Não há acontecimento publicado neste endereço." Path="@($"/acontecimentos/{Slug}")" />
+    <section class="section"><div class="wrap"><h1>Acontecimento não encontrado</h1></div></section>
+}
+else if (Item is not null)
+{
+    <Seo Title="@Item.Title" Description="@(Item.NeutralSummary ?? Item.Description ?? Item.Title)" Path="@($"/acontecimentos/{Item.Slug}")" JsonLd="@JsonLd" />
+    <section class="section">
+        <div class="wrap">
+            @if (Item.Demonstration)
+            {
+                <p class="banner">Registro de demonstração, limitado às fontes cadastradas.</p>
+            }
+            <p>
+                <span class="kind @Ui.KindClass(Item.SummaryKind)">@Item.SummaryKind</span>
+                <span class="badge">@Item.EventType</span>
+                <span class="badge">@Item.Importance</span>
+            </p>
+            <h1>@Item.Title</h1>
+            <p class="muted">@Ui.Date(Item.EventDate)@if (Item.EndDate is not null) { <text> – @Ui.Date(Item.EndDate)</text> }</p>
+            @if (!string.IsNullOrWhiteSpace(Item.PresidentName))
+            {
+                <p>Presidente vinculado: <a href="@($"/presidentes/{Item.PresidentSlug}")">@Item.PresidentName</a></p>
+            }
+            <p>@(Item.NeutralSummary ?? "Não há resumo publicado.")</p>
+            @if (!string.IsNullOrWhiteSpace(Item.Description))
+            {
+                <p>@Item.Description</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Item.DivergenceNote))
+            {
+                <p class="banner">Divergência entre fontes: @Item.DivergenceNote</p>
+            }
+            <h2>Fontes</h2>
+            <Sources Items="Item.Sources" Open="true" />
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    private EventCardDto? Item;
+    private bool Missing;
+    private string JsonLd => Item is null ? "" : Ui.Json(new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "Event",
+        ["name"] = Item.Title,
+        ["description"] = Item.NeutralSummary ?? Item.Description,
+        ["startDate"] = Item.EventDate?.ToString("yyyy-MM-dd")
+    });
+
+    protected override async Task OnInitializedAsync()
+    {
+        Item = await Queries.EventAsync(Slug, HttpContext.RequestAborted);
+        if (Item is null)
+        {
+            Missing = true;
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+    }
+}

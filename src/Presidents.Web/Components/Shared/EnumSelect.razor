@@ -1,0 +1,14 @@
+@typeparam T where T : struct, Enum
+
+<InputSelect TValue="T" Value="Value" ValueChanged="ValueChanged" ValueExpression="ValueExpression">
+    @foreach (var item in Enum.GetValues<T>())
+    {
+        <option value="@item">@EnumLabels.Any(item)</option>
+    }
+</InputSelect>
+
+@code {
+    [Parameter, EditorRequired] public T Value { get; set; }
+    [Parameter] public EventCallback<T> ValueChanged { get; set; }
+    [Parameter] public System.Linq.Expressions.Expression<Func<T>>? ValueExpression { get; set; }
+}

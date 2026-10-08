@@ -1,0 +1,82 @@
+@page "/leis/{Slug}"
+@inject QueryService Queries
+
+@if (Missing)
+{
+    <Seo Title="Lei não encontrada" Description="Não há ato normativo publicado neste endereço." Path="@($"/leis/{Slug}")" />
+    <section class="section"><div class="wrap"><h1>Lei não encontrada</h1></div></section>
+}
+else if (Item is not null)
+{
+    <Seo Title="@Item.Title" Description="@(Item.Summary ?? Item.Title)" Path="@($"/leis/{Item.Slug}")" JsonLd="@JsonLd" />
+    <section class="section">
+        <div class="wrap">
+            @if (Item.Demonstration)
+            {
+                <p class="banner">Registro de demonstração, limitado às fontes cadastradas.</p>
+            }
+            <p><span class="badge">@Item.Kind</span> <span class="badge">@Item.Number/@Item.Year</span> <span class="badge">@Item.OperationalStatus</span></p>
+            <h1>@Item.Title</h1>
+            <p>@Item.Summary</p>
+            <dl class="grid cards-3">
+                <div class="card"><dt>Sanção</dt><dd>@Ui.Date(Item.SanctionDate)</dd></div>
+                <div class="card"><dt>Promulgação</dt><dd>@Ui.Date(Item.PromulgationDate)</dd></div>
+                <div class="card"><dt>Publicação</dt><dd>@Ui.Date(Item.PublicationDate)</dd></div>
+                <div class="card"><dt>Vigência</dt><dd>@Ui.Date(Item.EffectiveDate)</dd></div>
+                <div class="card"><dt>Veto</dt><dd>@Ui.Date(Item.VetoDate)</dd></div>
+                <div class="card"><dt>Origem</dt><dd>@Item.Origin</dd></div>
+            </dl>
+            <h2>Autoria e tramitação</h2>
+            <p>@(Item.AttributedAsAuthor ? $"Autoria registrada: {Item.Proposer}." : "A autoria não foi atribuída a um presidente.")</p>
+            <p>Presidente em exercício: @(Item.PresidentInOffice ?? "não informado"). Este campo registra quem ocupava a Presidência; ele não significa autoria.</p>
+            @if (!string.IsNullOrWhiteSpace(Item.ProcessNote))
+            {
+                <p>@Item.ProcessNote</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Item.VetoNote))
+            {
+                <p>Veto: @Item.VetoNote</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Item.DivergenceNote))
+            {
+                <p class="banner">@Item.DivergenceNote</p>
+            }
+            <h2>Texto completo</h2>
+            @if (!string.IsNullOrWhiteSpace(Item.FullTextUrl))
+            {
+                <p><a href="@Item.FullTextUrl" rel="noopener noreferrer">Abrir o texto na fonte oficial</a></p>
+            }
+            else
+            {
+                <p class="empty">Não há URL de texto completo cadastrada. O sistema não reproduz o inteiro teor sem esse vínculo.</p>
+            }
+            <h2>Fontes</h2>
+            <Sources Items="Item.Sources" Open="true" />
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    private LawCardDto? Item;
+    private bool Missing;
+    private string JsonLd => Item is null ? "" : Ui.Json(new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "Legislation",
+        ["name"] = Item.Title,
+        ["legislationIdentifier"] = $"{Item.Number}/{Item.Year}",
+        ["url"] = Item.FullTextUrl
+    });
+
+    protected override async Task OnInitializedAsync()
+    {
+        Item = await Queries.LawAsync(Slug, HttpContext.RequestAborted);
+        if (Item is null)
+        {
+            Missing = true;
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+    }
+}

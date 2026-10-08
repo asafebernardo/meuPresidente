@@ -1,0 +1,115 @@
+@page "/admin/presidentes"
+@page "/admin/presidentes/novo"
+@page "/admin/presidentes/{Id:guid}"
+@attribute [Authorize(Policy = "Editor")]
+@layout AdminLayout
+@inject PresidentService Presidents
+@inject PublicationService Publication
+@inject NavigationManager Nav
+
+<PageTitle>Presidentes</PageTitle>
+<h1>Presidentes</h1>
+@if (!string.IsNullOrWhiteSpace(Error))
+{
+    <p class="error" role="alert">@Error</p>
+}
+@if (ShowForm)
+{
+    <p><a href="/admin/presidentes">Voltar à lista</a></p>
+    <p class="muted">Se já existirem mandatos, o resumo de datas, partido e vice é recalculado a partir deles.</p>
+    <EditForm Model="Form" FormName="president" OnSubmit="Save" method="post">
+        <div class="form-grid">
+            <label>Nome público <InputText @bind-Value="Form.Name" maxlength="200" /></label>
+            <label>Nome completo <InputText @bind-Value="Form.FullName" maxlength="400" /></label>
+            <label>Endereço <InputText @bind-Value="Form.Slug" maxlength="220" /></label>
+            <label>Nascimento <InputDate @bind-Value="Form.BirthDate" /></label>
+            <label>Falecimento <InputDate @bind-Value="Form.DeathDate" /></label>
+            <label>Partido no resumo <InputText @bind-Value="Form.Party" maxlength="120" /></label>
+            <label>Vice no resumo <InputText @bind-Value="Form.VicePresident" maxlength="200" /></label>
+            <label>Início do resumo <InputDate @bind-Value="Form.StartDate" /></label>
+            <label>Fim do resumo <InputDate @bind-Value="Form.EndDate" /></label>
+            <label>Foto (URL) <InputText @bind-Value="Form.PhotoUrl" maxlength="1000" /></label>
+            <label>Biografia oficial (URL) <InputText @bind-Value="Form.OfficialBiographyUrl" maxlength="1000" /></label>
+            <label>Página externa (URL) <InputText @bind-Value="Form.WikipediaUrl" maxlength="1000" /></label>
+            <label>Biografia <InputTextArea @bind-Value="Form.Biography" maxlength="8000" /></label>
+            <label>Contexto histórico <InputTextArea @bind-Value="Form.HistoricalContext" maxlength="8000" /></label>
+            <button type="submit">Salvar</button>
+        </div>
+    </EditForm>
+    <PublicationButtons Id="Id" Type="ContentEntityType.President" Key="president-status" />
+    @if (Actor.IsAdmin && Id is not null)
+    {
+        <form method="post" @formname="remove-president" @onsubmit="Remove">
+            <AntiforgeryToken />
+            <button class="danger" type="submit">Excluir</button>
+        </form>
+    }
+}
+else
+{
+    <p><a class="button" href="/admin/presidentes/novo">Novo presidente</a></p>
+    <AdminTable Caption="Presidentes" Rows="Rows" EditBase="/admin/presidentes" CanDelete="Actor.IsAdmin" OnCommand="Handle" />
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "president")] public PresidentForm? Form { get; set; }
+
+    private IReadOnlyList<AdminRow> Rows = [];
+    private string? Error;
+    private ActorContext Actor => Actors.From(HttpContext.User);
+    private bool ShowForm => Id is not null || Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].EndsWith("/novo", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var posted = Form is not null;
+        Form ??= new PresidentForm();
+        var token = HttpContext.RequestAborted;
+        if (!posted && ShowForm && Id is Guid id)
+        {
+            var loaded = await Presidents.GetFormAsync(id, Actor, token);
+            if (loaded is null) Error = "Presidente não encontrado.";
+            else Form = loaded;
+        }
+        else if (!ShowForm)
+            Rows = (await Presidents.ListAdminAsync(Actor, null, 1, 100, token)).Items;
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            Form!.Id = Id;
+            var saved = await Presidents.SaveAsync(Form, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo($"/admin/presidentes/{saved}", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is ValidationException or DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task Remove()
+    {
+        if (Id is not Guid id) return;
+        try
+        {
+            await Presidents.DeleteAsync(id, Actor, HttpContext.RequestAborted);
+            Nav.NavigateTo("/admin/presidentes", forceLoad: true);
+        }
+        catch (Exception exception) when (exception is DomainException or ForbiddenException or NotFoundException)
+        {
+            Error = Ui.Message(exception);
+        }
+    }
+
+    private async Task Handle(string verb, Guid id)
+    {
+        if (verb == "delete")
+            await Presidents.DeleteAsync(id, Actor, HttpContext.RequestAborted);
+        else if (AdminCommand.ToStatus(verb) is { } status)
+            await Publication.ChangePresidentAsync(id, status, Actor, HttpContext.RequestAborted);
+        Rows = (await Presidents.ListAdminAsync(Actor, null, 1, 100, HttpContext.RequestAborted)).Items;
+    }
+}
