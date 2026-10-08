@@ -89,7 +89,7 @@ button.danger { background: var(--danger); }
 .muted { color: var(--muted); }
 .section { padding: 1.5rem 0 2.5rem; }
 .section-head { display: flex; justify-content: space-between; gap: 1rem; align-items: end; }
-.stat { font-family: var(--serif); font-size: 2rem; margin: 0; }
+.stat, .topic-count { font-family: var(--serif); font-size: 2rem; margin: 0; }
 .badge, .kind {
   display: inline-flex; align-items: center; border-radius: 999px; padding: .15rem .6rem; font-size: .82rem; background: #efe7da; color: var(--ink);
 }

@@ -8,7 +8,7 @@
 <section class="section">
     <div class="wrap">
         <h1>Leis</h1>
-        <p class="lede">O filtro por presidente indica o presidente em exercício cadastrado. Isso não atribui autoria da norma.</p>
+        <p class="lede">A lista abre em 15/03/1985. O filtro por presidente indica quem estava em exercício na data de assinatura. Isso não atribui autoria. O tema, quando aparece, veio de palavras da ementa.</p>
         <form class="filter-form" method="get">
             <label>Pesquisa <input type="search" name="q" value="@Term" /></label>
             <label>Presidente em exercício
@@ -48,7 +48,7 @@
                 </select>
             </label>
             <label>Ano <input type="number" name="ano" value="@YearText" min="1800" max="2100" /></label>
-            <label>De <input type="date" name="de" value="@FromText" /></label>
+            <label>De <input type="date" name="de" value="@FromInput" /></label>
             <label>Até <input type="date" name="ate" value="@ToText" /></label>
             <button type="submit">Filtrar</button>
         </form>
@@ -61,8 +61,8 @@
                     <article class="card">
                         <p><span class="badge">@law.Kind</span> <span class="badge">@law.Number/@law.Year</span> <span class="badge">@law.OperationalStatus</span></p>
                         <h2><a href="@($"/leis/{law.Slug}")">@law.Title</a></h2>
-                        <p>@law.Summary</p>
-                        <p class="muted">Presidente em exercício: @(law.PresidentInOffice ?? "não informado")</p>
+                        <p>@(law.Summary is { Length: > 320 } ? law.Summary[..317].TrimEnd() + "…" : law.Summary)</p>
+                        <p class="muted">@Ui.Date(law.SanctionDate) · @(law.Categories.Count > 0 ? string.Join(", ", law.Categories) : "Tema não identificado") · Presidente em exercício: @(law.PresidentInOffice ?? "não informado")</p>
                     </article>
                 }
                 @if (Page.Items.Count == 0)
@@ -70,6 +70,7 @@
                     <p class="empty">Nenhuma lei publicada corresponde aos filtros.</p>
                 }
             </div>
+            <p class="muted"><a href="/leis?de=1800-01-01">Incluir atos anteriores a 15/03/1985</a></p>
             <p class="actions">
                 @if (PageNumber > 1)
                 {
@@ -100,7 +101,8 @@
     private int? Year => int.TryParse(YearText, out var year) ? year : null;
     private NormKind? Kind => Enum.TryParse<NormKind>(KindText, out var kind) ? kind : null;
     private LawOperationalStatus? Status => Enum.TryParse<LawOperationalStatus>(StatusText, out var status) ? status : null;
-    private DateOnly? From => DateOnly.TryParse(FromText, out var date) ? date : null;
+    private DateOnly? From => DateOnly.TryParse(FromText, out var date) ? date : FromText is null ? new DateOnly(1985, 3, 15) : null;
+    private string FromInput => string.IsNullOrEmpty(FromText) ? "1985-03-15" : FromText;
     private DateOnly? To => DateOnly.TryParse(ToText, out var date) ? date : null;
     private int PageNumber => int.TryParse(PageText, out var page) && page > 0 ? page : 1;
 

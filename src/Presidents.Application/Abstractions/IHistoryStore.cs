@@ -97,6 +97,10 @@ public interface IHistoryStore
     Task<IReadOnlyList<IngestionRecord>> ListIngestionAsync(int take, CancellationToken cancellationToken);
     void Add(IngestionRecord entity);
 
+    Task<IReadOnlyList<TopicCountDto>> CountLawTopicsAsync(DateOnly? from, Guid? presidentId, CancellationToken cancellationToken);
+    Task<int> CountLawsAsync(DateOnly? from, Guid? presidentId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<(Guid PresidentId, int Count)>> CountLawsByPresidentAsync(DateOnly? from, CancellationToken cancellationToken);
+    Task<IReadOnlyList<IndicatorObservation>> ListObservationsAsync(CancellationToken cancellationToken);
     Task<AdminStatsDto> AdminStatsAsync(CancellationToken cancellationToken);
     Task<PublicCounts> PublicCountsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<SearchHitRow>> SearchRowsAsync(string foldedTerm, string digits, CancellationToken cancellationToken);

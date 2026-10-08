@@ -28,6 +28,8 @@ Um presidente pode ter vários mandatos. Cada mandato guarda a própria forma de
 
 O conteúdo segue o fluxo Rascunho, Revisão, Publicado e Arquivado. Só o que está Publicado aparece no site e na API pública. Publicar presidente, mandato, acontecimento, lei, política, afirmação ou valor de indicador exige ao menos uma fonte publicada.
 
+O catálogo público, a partir de 15/03/1985, lista leis ordinárias, leis complementares e emendas constitucionais da lista de legislação do Senado. O tema sai de palavras da ementa e fica marcado como classificação automática. O presidente em exercício é o do período que contém a data de assinatura. Os indicadores de economia e trabalho são o IPCA e o PIB do IBGE, o salário mínimo da série 1619 do Banco Central e a taxa de desocupação da PNAD Contínua. A variação descreve o período; ela não isola o efeito das leis. Saúde, educação e os outros temas mostram as leis e registram que não há série oficial carregada.
+
 ## Instalação
 
 ```bash
@@ -55,6 +57,7 @@ Troque a senha do administrador e a chave JWT fora de uma máquina local.
 | `ConnectionStrings__Redis` | Cache distribuído. Sem ela, o processo usa memória |
 | `Database__ApplyMigrations` | Aplica as migrations na inicialização |
 | `Seed__ApplyDemoData` | Carrega a semente de demonstração se o acervo ainda estiver vazio |
+| `Seed__ApplyLawCatalog` | Importa leis do Senado desde 15/03/1985 e as séries oficiais de indicadores. Em Development, o padrão é ligar |
 | `Seed__AdminEmail` e `Seed__AdminPassword` | Cria o papel Admin e o primeiro usuário. Sem as duas, nenhum administrador é criado |
 | `Jwt__Key` | Assinatura JWT, com no mínimo 32 caracteres. Obrigatória fora de Development |
 | `AI__ApiKey` | Chave do modelo. Sem ela, as respostas usam apenas o texto recuperado no banco |

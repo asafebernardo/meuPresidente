@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Presidents.Infrastructure.Catalog;
 using Presidents.Infrastructure.Identity;
 
 namespace Presidents.Infrastructure.Persistence;
@@ -30,6 +31,12 @@ public static class DatabaseInitializer
         {
             logger.LogInformation("Carregando dados de demonstração, quando ainda não existirem.");
             await DemoDataSeeder.SeedAsync(db, cancellationToken);
+        }
+
+        if (config.GetValue("Seed:ApplyLawCatalog", environment.IsDevelopment()))
+        {
+            logger.LogInformation("Carregando o catálogo de leis da Nova República, quando ainda não existir.");
+            await NovaRepublicaCatalog.ImportAsync(db, logger, cancellationToken);
         }
     }
 }

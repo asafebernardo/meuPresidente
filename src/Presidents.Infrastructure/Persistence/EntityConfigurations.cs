@@ -224,6 +224,20 @@ internal sealed class IndicatorConfiguration : IEntityTypeConfiguration<Indicato
     }
 }
 
+internal sealed class IndicatorObservationConfiguration : IEntityTypeConfiguration<IndicatorObservation>
+{
+    public void Configure(EntityTypeBuilder<IndicatorObservation> builder)
+    {
+        builder.ToTable("IndicatorObservations");
+        Config.Publication(builder);
+        builder.Property(x => x.Value).HasPrecision(18, 4);
+        builder.Property(x => x.Note).HasMaxLength(FieldLimits.Summary);
+        builder.HasIndex(x => new { x.IndicatorId, x.ReferenceDate }).IsUnique();
+        builder.HasOne(x => x.Indicator).WithMany().HasForeignKey(x => x.IndicatorId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Source).WithMany().HasForeignKey(x => x.SourceId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 internal sealed class PresidentIndicatorConfiguration : IEntityTypeConfiguration<PresidentIndicator>
 {
     public void Configure(EntityTypeBuilder<PresidentIndicator> builder)

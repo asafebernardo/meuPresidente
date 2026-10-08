@@ -13,6 +13,16 @@ else if (Category is not null)
         <div class="wrap">
             <h1>@Category.Name</h1>
             <p>@(Category.Description ?? "Categoria do acervo publicado.")</p>
+            <p class="banner">As leis deste tema foram agrupadas por palavras da ementa oficial. A classificação é automática e não é o índice do Senado.</p>
+            <p><a href="@($"/leis?categoria={Category.Id}&de=1985-03-15")">Lista completa de leis neste tema desde 15/03/1985</a></p>
+            @if (Category.Slug is "economia" or "trabalho")
+            {
+                <p><a href="/areas">Variação dos indicadores oficiais desta área</a></p>
+            }
+            else
+            {
+                <p class="muted">Não há série oficial carregada para este tema. A página de áreas reúne inflação, PIB, salário mínimo e desocupação.</p>
+            }
             <h2>Acontecimentos</h2>
             @foreach (var ev in Events)
             {
@@ -23,6 +33,7 @@ else if (Category is not null)
                 <p class="empty">Nenhum acontecimento publicado nesta categoria.</p>
             }
             <h2>Leis</h2>
+            <p class="muted">Até 100 das mais recentes neste tema. A lista completa está no link acima.</p>
             @foreach (var law in Laws)
             {
                 <article class="card"><h3><a href="@($"/leis/{law.Slug}")">@law.Title</a></h3><p>@law.Number/@law.Year · @law.Kind</p></article>

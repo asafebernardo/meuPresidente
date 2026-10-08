@@ -24,6 +24,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<SourceDivergence> Divergences => Set<SourceDivergence>();
     public DbSet<Indicator> Indicators => Set<Indicator>();
     public DbSet<PresidentIndicator> PresidentIndicators => Set<PresidentIndicator>();
+    public DbSet<IndicatorObservation> IndicatorObservations => Set<IndicatorObservation>();
     public DbSet<ContentCategoryLink> CategoryLinks => Set<ContentCategoryLink>();
     public DbSet<IngestionRecord> IngestionRecords => Set<IngestionRecord>();
 

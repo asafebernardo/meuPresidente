@@ -176,7 +176,7 @@ public sealed class HistoryStore(AppDbContext db) : IHistoryStore
             rows = rows.Where(law => law.SearchText.Contains(folded) || (digits.Length > 0 && law.NumberNormalized.Contains(digits)));
 
         var total = await rows.CountAsync(cancellationToken);
-        var items = await rows.OrderByDescending(law => law.Year).ThenBy(law => law.Number).Skip(skip).Take(size).ToListAsync(cancellationToken);
+        var items = await rows.OrderByDescending(law => law.SanctionDate ?? law.PublicationDate).ThenByDescending(law => law.Year).ThenBy(law => law.NumberNormalized).Skip(skip).Take(size).ToListAsync(cancellationToken);
         return new PagedResult<Law>(items, current, size, total);
     }
 
@@ -430,6 +430,51 @@ public sealed class HistoryStore(AppDbContext db) : IHistoryStore
             await db.Categories.CountAsync(cancellationToken),
             await db.Sources.CountAsync(cancellationToken),
             drafts);
+    }
+
+    public async Task<IReadOnlyList<TopicCountDto>> CountLawTopicsAsync(DateOnly? from, Guid? presidentId, CancellationToken cancellationToken)
+    {
+        var laws = PublishedLaws(from, presidentId);
+        return await (
+            from link in db.CategoryLinks.AsNoTracking()
+            join law in laws on link.EntityId equals law.Id
+            join category in db.Categories.AsNoTracking() on link.CategoryId equals category.Id
+            where link.EntityType == ContentEntityType.Law && link.IsPrimary
+            group category by new { category.Id, category.Name, category.Slug, category.SortOrder } into grouped
+            orderby grouped.Count() descending, grouped.Key.SortOrder
+            select new TopicCountDto(grouped.Key.Id, grouped.Key.Name, grouped.Key.Slug, grouped.Count())
+        ).ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountLawsAsync(DateOnly? from, Guid? presidentId, CancellationToken cancellationToken) =>
+        PublishedLaws(from, presidentId).CountAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<(Guid PresidentId, int Count)>> CountLawsByPresidentAsync(DateOnly? from, CancellationToken cancellationToken)
+    {
+        var rows = await PublishedLaws(from, null)
+            .Where(law => law.PresidentInOfficeId != null)
+            .GroupBy(law => law.PresidentInOfficeId!.Value)
+            .Select(group => new { PresidentId = group.Key, Count = group.Count() })
+            .ToListAsync(cancellationToken);
+        return rows.Select(row => (row.PresidentId, row.Count)).ToList();
+    }
+
+    public async Task<IReadOnlyList<IndicatorObservation>> ListObservationsAsync(CancellationToken cancellationToken) =>
+        await db.IndicatorObservations.AsNoTracking()
+            .Include(item => item.Indicator)
+            .Include(item => item.Source)
+            .Where(item => item.Status == PublicationStatus.Published)
+            .OrderBy(item => item.ReferenceDate)
+            .ToListAsync(cancellationToken);
+
+    private IQueryable<Law> PublishedLaws(DateOnly? from, Guid? presidentId)
+    {
+        var laws = db.Laws.AsNoTracking().Where(law => law.Status == PublicationStatus.Published);
+        if (from is { } start)
+            laws = laws.Where(law => (law.SanctionDate ?? law.PublicationDate) >= start);
+        if (presidentId is { } id)
+            laws = laws.Where(law => law.PresidentInOfficeId == id);
+        return laws;
     }
 
     public async Task<PublicCounts> PublicCountsAsync(CancellationToken cancellationToken) => new(

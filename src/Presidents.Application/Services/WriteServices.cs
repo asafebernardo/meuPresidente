@@ -127,15 +127,16 @@ public sealed class PresidentService(IHistoryStore store, IValidator<PresidentFo
             .Where(mandate => !publishedOnly || mandate.Status == PublicationStatus.Published)
             .OrderBy(mandate => mandate.StartDate)
             .ToList();
-        var start = mandates.Count > 0 ? mandates[0].StartDate : president.StartDate;
-        var end = mandates.Count > 0 ? mandates[^1].EndDate : president.EndDate;
+        var mandateLabel = mandates.Count > 0
+            ? string.Join(" · ", mandates.Select(mandate => Citations.Mandate(mandate.StartDate, mandate.EndDate)))
+            : Citations.Mandate(president.StartDate, president.EndDate);
         return new PresidentListItemDto(
             president.Id,
             president.Name,
             president.FullName,
             president.Slug,
             president.PhotoUrl,
-            Citations.Mandate(start, end),
+            mandateLabel,
             president.Party,
             president.VicePresident,
             president.Provenance == DataProvenance.DemonstrationSeed);

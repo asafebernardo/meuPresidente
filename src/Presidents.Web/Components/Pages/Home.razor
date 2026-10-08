@@ -2,16 +2,16 @@
 @inject QueryService Queries
 @inject IConfiguration Configuration
 
-<Seo Title="História dos Presidentes" Description="Informação histórica organizada por fatos, documentos, leis e fontes." Path="/" JsonLd="@JsonLd" />
+<Seo Title="Leis da Nova República" Description="Leis federais sancionadas desde 15 de março de 1985, separadas por tema, com a variação de indicadores oficiais em cada área." Path="/" JsonLd="@JsonLd" />
 
 <section class="hero">
     <div class="wrap">
-        <p class="eyebrow">Acervo público</p>
-        <h1>Conheça a história dos presidentes do Brasil</h1>
-        <p class="lede">Informação histórica organizada por fatos, documentos, leis e fontes.</p>
+        <p class="eyebrow">Desde 15 de março de 1985</p>
+        <h1>Leis sancionadas desde a redemocratização</h1>
+        <p class="lede">Resumo de cada lei federal assinada a partir do fim da ditadura militar, separado por tema, com a variação de indicadores oficiais em cada área.</p>
         <form class="search-form" method="get" action="/busca" role="search">
             <label class="visually-hidden" for="q">Pesquisa</label>
-            <input id="q" type="search" name="q" placeholder="Pesquise um presidente, lei, acontecimento ou tema..." />
+            <input id="q" type="search" name="q" placeholder="Pesquise uma lei, um tema ou um presidente..." />
             <button type="submit">Pesquisar</button>
         </form>
     </div>
@@ -21,22 +21,22 @@
 {
     <section class="section">
         <div class="wrap">
-            @if (Page.Presidents.Any(item => item.Demonstration) || Page.RecentEvents.Any(item => item.Demonstration) || Page.Laws.Any(item => item.Demonstration))
-            {
-                <p class="banner">Parte do acervo visível é semente de demonstração. Cada cartão indica essa origem e mostra somente as fontes cadastradas.</p>
-            }
+            <p class="banner">O tema de cada lei é uma classificação automática pelas palavras da ementa oficial. Não é o índice do Senado. O presidente indicado é quem estava em exercício na data de assinatura, sem que isso seja autoria. @PeriodMetrics.Disclaimer</p>
             <div class="section-head">
-                <h2>Linha do tempo</h2>
-                <a href="/linha-do-tempo">Ver todos os períodos</a>
+                <h2>Leis por tema</h2>
+                <a href="/leis?de=1985-03-15">@Page.LawsSinceRedemocratization.ToString("N0") leis na lista</a>
             </div>
-            <div class="timeline">
-                @foreach (var mandate in Page.Timeline.Take(8))
+            <div class="grid cards-4">
+                @foreach (var topic in Page.Topics)
                 {
-                    <article>
-                        <p class="muted">@mandate.StartDate.ToString("dd/MM/yyyy") – @(mandate.EndDate?.ToString("dd/MM/yyyy") ?? "em aberto")</p>
-                        <h3><a href="@($"/presidentes/{mandate.Slug}")">@mandate.PresidentName</a></h3>
-                        <p>@mandate.GovernmentType · @mandate.ArrivalMethod</p>
-                    </article>
+                    <a class="card" href="@($"/categorias/{topic.Slug}")">
+                        <p class="topic-count">@topic.LawCount.ToString("N0")</p>
+                        <strong>@topic.Name</strong>
+                    </a>
+                }
+                @if (Page.Topics.Count == 0)
+                {
+                    <p class="empty">O catálogo de leis ainda não foi carregado.</p>
                 }
             </div>
         </div>
@@ -45,94 +45,84 @@
     <section class="section">
         <div class="wrap">
             <div class="section-head">
-                <h2>Presidentes em destaque</h2>
+                <h2>Variação por área</h2>
+                <a href="/areas">Ver as séries</a>
+            </div>
+            <p class="muted">Há série oficial carregada para economia e trabalho. Nos demais temas, o acervo mostra a lista de leis e informa que não há indicador correspondente.</p>
+            @foreach (var area in Page.Areas)
+            {
+                <h3>@area.Name</h3>
+                <p>@area.SeriesNote</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Mandato</th><th>Indicador</th><th>Variação no período</th><th>Fonte</th></tr></thead>
+                        <tbody>
+                            @foreach (var row in area.Rows)
+                            {
+                                <tr>
+                                    <td><a href="@($"/presidentes/{row.PresidentSlug}")">@row.PresidentName</a><br /><span class="muted">@row.MandateLabel</span></td>
+                                    <td>@row.Indicator</td>
+                                    <td>@row.Text</td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(row.SourceUrl))
+                                        {
+                                            <a href="@row.SourceUrl" rel="noopener noreferrer">@row.SourceName</a>
+                                        }
+                                        else
+                                        {
+                                            @row.SourceName
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="wrap">
+            <div class="section-head">
+                <h2>Quem estava em exercício</h2>
                 <a href="/presidentes">Todos os presidentes</a>
             </div>
-            <div class="grid cards-3">
-                @foreach (var president in Page.Presidents)
-                {
-                    <article class="card">
-                        <div class="portrait" aria-hidden="true">
-                            @if (!string.IsNullOrWhiteSpace(president.PhotoUrl))
-                            {
-                                <img src="@president.PhotoUrl" alt="" />
-                            }
-                            else
-                            {
-                                @Ui.Initials(president.Name)
-                            }
-                        </div>
-                        <h3><a href="@($"/presidentes/{president.Slug}")">@president.FullName</a></h3>
-                        <p>@president.Mandate</p>
-                        <p class="muted">@(president.Party ?? "Partido não informado no resumo")</p>
-                    </article>
-                }
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Presidente</th><th>Períodos</th><th>Leis com assinatura no período</th></tr></thead>
+                    <tbody>
+                        @foreach (var share in Page.LawShares)
+                        {
+                            <tr>
+                                <td><a href="@($"/presidentes/{share.Slug}")">@share.Name</a></td>
+                                <td>@share.Mandate</td>
+                                <td><a href="@($"/leis?presidente={share.Id}&de=1985-03-15")">@share.LawCount.ToString("N0")</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
+            <p class="muted">A contagem liga a lei ao presidente em exercício na data de assinatura. Leis de 15/03/1985 a 20/04/1985 ficam sem presidente: a fonte usada registra a assunção de José Sarney em 21/04/1985.</p>
         </div>
     </section>
 
     <section class="section">
         <div class="wrap">
             <div class="section-head">
-                <h2>Categorias</h2>
-                <a href="/categorias">Ver categorias</a>
+                <h2>Assinaturas recentes</h2>
+                <a href="/leis?de=1985-03-15">Catálogo completo</a>
             </div>
-            <div class="grid cards-4">
-                @foreach (var category in Page.Categories)
+            <div class="facts">
+                @foreach (var law in Page.Laws)
                 {
-                    <a class="card" href="@($"/categorias/{category.Slug}")">@category.Name</a>
+                    <article class="card">
+                        <p><span class="badge">@law.Kind</span> <span class="badge">@law.Number/@law.Year</span> @if (law.SanctionDate is { } date) { <span class="badge">@date.ToString("dd/MM/yyyy")</span> }</p>
+                        <h3><a href="@($"/leis/{law.Slug}")">@law.Title</a></h3>
+                        <p>@Excerpt(law.Summary)</p>
+                        <p class="muted">@(law.Categories.Count > 0 ? string.Join(", ", law.Categories) : "Tema não identificado") · @(law.PresidentInOffice ?? "presidente em exercício não informado")</p>
+                    </article>
                 }
-            </div>
-        </div>
-    </section>
-
-    <section class="section">
-        <div class="wrap grid cards-2">
-            <div>
-                <h2>Acontecimentos publicados</h2>
-                <div class="facts">
-                    @foreach (var item in Page.RecentEvents)
-                    {
-                        <FactCard Title="@item.Title" Href="@($"/acontecimentos/{item.Slug}")" Date="@item.EventDate" Kind="@item.SummaryKind" Summary="@item.NeutralSummary" Divergence="@item.DivergenceNote" Demonstration="@item.Demonstration" Categories="@item.Categories" Sources="@item.Sources" />
-                    }
-                    @if (Page.RecentEvents.Count == 0)
-                    {
-                        <p class="empty">Nenhum acontecimento publicado.</p>
-                    }
-                </div>
-            </div>
-            <div>
-                <h2>Leis catalogadas</h2>
-                <div class="facts">
-                    @foreach (var law in Page.Laws)
-                    {
-                        <article class="card">
-                            <p><span class="badge">@law.Kind</span> <span class="badge">@law.Number/@law.Year</span></p>
-                            <h3><a href="@($"/leis/{law.Slug}")">@law.Title</a></h3>
-                            <p>@law.Summary</p>
-                        </article>
-                    }
-                    @if (Page.Laws.Count == 0)
-                    {
-                        <p class="empty">Nenhuma lei publicada.</p>
-                    }
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="section">
-        <div class="wrap">
-            <h2>Estatísticas do banco publicado</h2>
-            <div class="grid cards-4">
-                <article class="card"><p class="stat">@Page.Counts.Presidents</p><p>Presidentes</p></article>
-                <article class="card"><p class="stat">@Page.Counts.Presidencies</p><p>Mandatos</p></article>
-                <article class="card"><p class="stat">@Page.Counts.Events</p><p>Acontecimentos</p></article>
-                <article class="card"><p class="stat">@Page.Counts.Laws</p><p>Leis</p></article>
-                <article class="card"><p class="stat">@Page.Counts.Policies</p><p>Políticas</p></article>
-                <article class="card"><p class="stat">@Page.Counts.Sources</p><p>Fontes</p></article>
-                <article class="card"><p class="stat">@Page.Counts.Indicators</p><p>Indicadores</p></article>
-                <article class="card"><p class="stat">@Page.Counts.Categories</p><p>Categorias</p></article>
             </div>
         </div>
     </section>
@@ -146,7 +136,7 @@
         ["@type"] = "WebSite",
         ["name"] = "História dos Presidentes",
         ["url"] = Canonical,
-        ["description"] = "Informação histórica organizada por fatos, documentos, leis e fontes.",
+        ["description"] = "Leis federais sancionadas desde 15 de março de 1985, separadas por tema, com indicadores oficiais.",
         ["potentialAction"] = new Dictionary<string, object?>
         {
             ["@type"] = "SearchAction",
@@ -156,6 +146,13 @@
     });
 
     private string Canonical => (Configuration["Public:CanonicalBaseUrl"] ?? "http://localhost:5088").TrimEnd('/');
+
+    private static string Excerpt(string? summary)
+    {
+        if (string.IsNullOrWhiteSpace(summary))
+            return "";
+        return summary.Length <= 280 ? summary : summary[..277].TrimEnd() + "…";
+    }
 
     protected override async Task OnInitializedAsync() => Page = await Queries.HomeAsync(CancellationToken.None);
 }

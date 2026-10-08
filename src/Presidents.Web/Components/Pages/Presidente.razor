@@ -35,21 +35,88 @@ else if (Item is not null)
                 </div>
             </div>
             <nav class="anchor-nav" aria-label="Seções do presidente">
-                <a href="#visao-geral">Visão geral</a>
-                <a href="#economia">Economia</a>
-                <a href="#educacao">Educação</a>
-                <a href="#saude">Saúde</a>
-                <a href="#infraestrutura">Infraestrutura</a>
                 <a href="#leis">Leis</a>
-                <a href="#acontecimentos">Acontecimentos</a>
-                <a href="#indicadores">Indicadores</a>
-                <a href="#relacoes-internacionais">Relações internacionais</a>
-                <a href="#controversias">Controvérsias</a>
+                <a href="#temas">Temas</a>
+                <a href="#indicadores">Indicadores do período</a>
+                <a href="#mandatos">Mandatos</a>
                 <a href="#fontes">Fontes</a>
             </nav>
 
-            <section id="visao-geral">
-                <h2>Visão geral</h2>
+            <section id="leis">
+                <h2>Leis assinadas no período</h2>
+                <p class="muted">@Item.LawTotal.ToString("N0") normas publicadas com data de assinatura a partir de 15/03/1985 e presidente em exercício neste registro. A amostra abaixo traz as mais recentes. A assinatura não atribui autoria.</p>
+                <p><a href="@($"/leis?presidente={Item.Id}&de=1985-03-15")">Abrir a lista completa</a></p>
+                @if (Item.Laws.Count == 0)
+                {
+                    <p class="empty">Nenhuma lei publicada está vinculada a este presidente.</p>
+                }
+                @foreach (var law in Item.Laws)
+                {
+                    <article class="card">
+                        <p><span class="badge">@law.Kind</span> <span class="badge">@law.Number/@law.Year</span> <span class="badge">@Ui.Date(law.SanctionDate)</span></p>
+                        <h3><a href="@($"/leis/{law.Slug}")">@law.Title</a></h3>
+                        <p>@(law.Summary is { Length: > 280 } ? law.Summary[..277].TrimEnd() + "…" : law.Summary)</p>
+                        <p class="muted">@(law.Categories.Count > 0 ? string.Join(", ", law.Categories) : "Tema não identificado")</p>
+                    </article>
+                }
+            </section>
+
+            <section id="temas">
+                <h2>Temas das leis</h2>
+                <div class="grid cards-4">
+                    @foreach (var topic in Item.LawTopics)
+                    {
+                        <a class="card" href="@($"/leis?presidente={Item.Id}&categoria={topic.Id}&de=1985-03-15")">
+                            <p class="topic-count">@topic.LawCount.ToString("N0")</p>
+                            <strong>@topic.Name</strong>
+                        </a>
+                    }
+                </div>
+                @if (Item.LawTopics.Count == 0)
+                {
+                    <p class="empty">Nenhuma lei deste presidente recebeu tema.</p>
+                }
+            </section>
+
+            <section id="indicadores">
+                <h2>Indicadores do período</h2>
+                <p>@PeriodMetrics.Disclaimer</p>
+                @if (Item.PeriodMetrics.Count == 0)
+                {
+                    <p class="empty">Não há observação de IPCA, PIB, salário mínimo ou desocupação com início dentro dos mandatos publicados.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Mandato</th><th>Indicador</th><th>Variação no período</th><th>Fonte</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in Item.PeriodMetrics)
+                                {
+                                    <tr>
+                                        <td>@row.MandateLabel</td>
+                                        <td>@row.Indicator</td>
+                                        <td>@row.Text</td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(row.SourceUrl))
+                                            {
+                                                <a href="@row.SourceUrl" rel="noopener noreferrer">@row.SourceName</a>
+                                            }
+                                            else
+                                            {
+                                                @row.SourceName
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section id="mandatos">
+                <h2>Mandatos e registro biográfico</h2>
                 <h3>Biografia</h3>
                 <p>@(Item.Biography ?? "Não há biografia publicada.")</p>
                 <h3>Contexto histórico</h3>
@@ -91,14 +158,10 @@ else if (Item is not null)
                 }
             </section>
 
-            @foreach (var section in Item.Sections)
+            @foreach (var section in Item.Sections.Where(section => section.Events.Count > 0 || section.Policies.Count > 0))
             {
                 <section id="@section.Slug">
                     <h2>@section.Name</h2>
-                    @if (section.Events.Count == 0 && section.Policies.Count == 0)
-                    {
-                        <p class="empty">Não há acontecimento ou política publicada nesta categoria para este presidente.</p>
-                    }
                     @foreach (var ev in section.Events)
                     {
                         <FactCard Title="@ev.Title" Href="@($"/acontecimentos/{ev.Slug}")" Date="@ev.EventDate" Kind="@ev.SummaryKind" Summary="@(ev.NeutralSummary ?? ev.Description)" Divergence="@ev.DivergenceNote" Demonstration="@ev.Demonstration" Categories="@ev.Categories" Sources="@ev.Sources" />
@@ -114,81 +177,53 @@ else if (Item is not null)
                 </section>
             }
 
-            <section id="leis">
-                <h2>Leis</h2>
-                <p class="muted">A publicação de uma norma durante o mandato não a torna, por si, de autoria do presidente em exercício.</p>
-                @if (Item.Laws.Count == 0)
-                {
-                    <p class="empty">Nenhuma lei publicada está vinculada a este presidente.</p>
-                }
-                @foreach (var law in Item.Laws)
-                {
-                    <article class="card">
-                        <p><span class="badge">@law.Kind</span> <span class="badge">@law.Number/@law.Year</span> <span class="badge">@law.OperationalStatus</span></p>
-                        <h3><a href="@($"/leis/{law.Slug}")">@law.Title</a></h3>
-                        <p>@law.Summary</p>
-                        <p>@(law.AttributedAsAuthor ? $"Autoria registrada: {law.Proposer}" : "Autoria não atribuída a um presidente.")</p>
-                        <Sources Items="law.Sources" />
-                    </article>
-                }
-            </section>
+            @if (Item.Events.Count > 0)
+            {
+                <section id="acontecimentos">
+                    <h2>Acontecimentos</h2>
+                    @foreach (var ev in Item.Events)
+                    {
+                        <FactCard Title="@ev.Title" Href="@($"/acontecimentos/{ev.Slug}")" Date="@ev.EventDate" Kind="@ev.SummaryKind" Summary="@(ev.NeutralSummary ?? ev.Description)" Divergence="@ev.DivergenceNote" Demonstration="@ev.Demonstration" Categories="@ev.Categories" Sources="@ev.Sources" />
+                    }
+                </section>
+            }
 
-            <section id="acontecimentos">
-                <h2>Acontecimentos</h2>
-                @if (Item.Events.Count == 0)
-                {
-                    <p class="empty">Nenhum acontecimento publicado.</p>
-                }
-                @foreach (var ev in Item.Events)
-                {
-                    <FactCard Title="@ev.Title" Href="@($"/acontecimentos/{ev.Slug}")" Date="@ev.EventDate" Kind="@ev.SummaryKind" Summary="@(ev.NeutralSummary ?? ev.Description)" Divergence="@ev.DivergenceNote" Demonstration="@ev.Demonstration" Categories="@ev.Categories" Sources="@ev.Sources" />
-                }
-            </section>
+            @if (Item.Indicators.Count > 0)
+            {
+                <h3>Valores anuais publicados</h3>
+                <div class="table-wrap">
+                    <table>
+                        <caption>Valores publicados com fonte</caption>
+                        <thead><tr><th>Indicador</th><th>Ano</th><th>Valor</th><th>Fonte</th></tr></thead>
+                        <tbody>
+                            @foreach (var point in Item.Indicators)
+                            {
+                                <tr>
+                                    <td>@point.Indicator</td>
+                                    <td>@point.Year</td>
+                                    <td>@point.Value @point.Unit</td>
+                                    <td>
+                                        @if (point.Source?.Url is { Length: > 0 } url)
+                                        {
+                                            <a href="@url" rel="noopener noreferrer">@point.Source.Name</a>
+                                        }
+                                        else
+                                        {
+                                            @(point.Source?.Name ?? "Fonte não publicada")
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
 
-            <section id="indicadores">
-                <h2>Indicadores</h2>
-                @if (Item.Indicators.Count == 0)
-                {
-                    <p class="empty">Sem valor publicado.</p>
-                }
-                else
-                {
-                    <div class="table-wrap">
-                        <table>
-                            <caption>Valores publicados com fonte</caption>
-                            <thead><tr><th>Indicador</th><th>Ano</th><th>Valor</th><th>Fonte</th></tr></thead>
-                            <tbody>
-                                @foreach (var point in Item.Indicators)
-                                {
-                                    <tr>
-                                        <td>@point.Indicator</td>
-                                        <td>@point.Year</td>
-                                        <td>@point.Value @point.Unit</td>
-                                        <td>
-                                            @if (point.Source?.Url is { Length: > 0 } url)
-                                            {
-                                                <a href="@url" rel="noopener noreferrer">@point.Source.Name</a>
-                                            }
-                                            else
-                                            {
-                                                @(point.Source?.Name ?? "Fonte não publicada")
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </section>
-
+            @if (Controversies.Count > 0 || ScandalEvents.Count > 0)
+            {
             <section id="controversias">
                 <h2>Controvérsias</h2>
                 <p class="muted">Críticas, opiniões e interpretações aparecem com a origem da avaliação. Elas não são convertidas em fato.</p>
-                @if (Controversies.Count == 0 && ScandalEvents.Count == 0)
-                {
-                    <p class="empty">Não há controvérsia publicada com fonte neste registro.</p>
-                }
                 @foreach (var statement in Controversies)
                 {
                     <article class="card">
@@ -203,6 +238,7 @@ else if (Item is not null)
                     <FactCard Title="@ev.Title" Href="@($"/acontecimentos/{ev.Slug}")" Date="@ev.EventDate" Kind="@ev.SummaryKind" Summary="@(ev.NeutralSummary ?? ev.Description)" Divergence="@ev.DivergenceNote" Demonstration="@ev.Demonstration" Categories="@ev.Categories" Sources="@ev.Sources" />
                 }
             </section>
+            }
 
             <section id="fontes">
                 <h2>Fontes do registro</h2>

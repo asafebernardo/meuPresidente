@@ -8,6 +8,7 @@ using Presidents.Application.Contracts;
 using Presidents.Application.Rag;
 using Presidents.Application.Search;
 using Presidents.Application.Security;
+using Presidents.Domain.Catalog;
 using Presidents.Domain.Common;
 using Presidents.Domain.Entities;
 using Presidents.Domain.Enums;
@@ -28,7 +29,7 @@ public sealed class QueryService(IHistoryStore store, IDistributedCache cache)
 
     public async Task<HomePageDto> HomeAsync(CancellationToken cancellationToken)
     {
-        const string key = "home:published:v1";
+        const string key = "home:published:v2";
         var cached = await cache.GetStringAsync(key, cancellationToken);
         if (!string.IsNullOrEmpty(cached))
         {
@@ -47,14 +48,29 @@ public sealed class QueryService(IHistoryStore store, IDistributedCache cache)
 
     private async Task<HomePageDto> BuildHomeAsync(CancellationToken cancellationToken)
     {
-        var presidents = await store.PagePresidentsAsync(true, null, 1, 12, cancellationToken);
+        var since = MandateCoverage.Redemocratization;
+        var presidents = await store.PagePresidentsAsync(true, null, 1, 20, cancellationToken);
         var categories = await store.ListCategoriesAsync(true, cancellationToken);
         var events = await store.PageEventsAsync(new EventQuery { PublishedOnly = true, Page = 1, PageSize = 6 }, cancellationToken);
-        var laws = await store.PageLawsAsync(new LawQuery { PublishedOnly = true, Page = 1, PageSize = 6 }, cancellationToken);
+        var laws = await store.PageLawsAsync(new LawQuery { PublishedOnly = true, From = since, Page = 1, PageSize = 6 }, cancellationToken);
         var mandates = await store.ListPresidenciesAsync(true, null, cancellationToken);
         var counts = await store.PublicCountsAsync(cancellationToken);
+        var topics = await store.CountLawTopicsAsync(since, null, cancellationToken);
+        var lawTotal = await store.CountLawsAsync(since, null, cancellationToken);
+        var byPresident = await store.CountLawsByPresidentAsync(since, cancellationToken);
+        var areas = await BuildAreasAsync(null, cancellationToken);
         var eventCards = await MapEventsAsync(events.Items, publishedOnly: true, cancellationToken);
         var lawCards = await MapLawsAsync(laws.Items, publishedOnly: true, cancellationToken);
+        var shareMap = byPresident.ToDictionary(item => item.PresidentId, item => item.Count);
+        var shares = presidents.Items
+            .Where(president => president.StartDate >= since)
+            .Select(president => new PresidentLawShareDto(
+                president.Id,
+                president.FullName,
+                president.Slug,
+                PresidentService.MapList(president, true).Mandate,
+                shareMap.GetValueOrDefault(president.Id)))
+            .ToList();
         return new HomePageDto(
             presidents.Items.Select(item => PresidentService.MapList(item, true)).ToList(),
             categories.Select(MapCategory).ToList(),
@@ -64,7 +80,11 @@ public sealed class QueryService(IHistoryStore store, IDistributedCache cache)
                 .OrderBy(mandate => mandate.StartDate)
                 .Select(MapMandate)
                 .ToList(),
-            counts);
+            counts,
+            lawTotal,
+            topics,
+            shares,
+            areas);
     }
 
     public async Task<PresidentDetailDto?> PresidentAsync(string slug, CancellationToken cancellationToken)
@@ -74,7 +94,7 @@ public sealed class QueryService(IHistoryStore store, IDistributedCache cache)
 
         var mandates = president.Presidencies.Where(item => item.Status == PublicationStatus.Published).OrderBy(item => item.StartDate).ToList();
         var events = await store.PageEventsAsync(new EventQuery { PublishedOnly = true, PresidentId = president.Id, Page = 1, PageSize = 100 }, cancellationToken);
-        var laws = await store.PageLawsAsync(new LawQuery { PublishedOnly = true, PresidentId = president.Id, Page = 1, PageSize = 100 }, cancellationToken);
+        var laws = await store.PageLawsAsync(new LawQuery { PublishedOnly = true, PresidentId = president.Id, From = MandateCoverage.Redemocratization, Page = 1, PageSize = 12 }, cancellationToken);
         var policies = await store.PagePoliciesAsync(true, president.Id, null, 1, 100, cancellationToken);
         var eventCards = await MapEventsAsync(events.Items, true, cancellationToken);
         var lawCards = await MapLawsAsync(laws.Items, true, cancellationToken);
@@ -83,6 +103,9 @@ public sealed class QueryService(IHistoryStore store, IDistributedCache cache)
         var values = await store.ListIndicatorValuesAsync(true, president.Id, cancellationToken);
         var links = await store.ListFactSourcesAsync(ContentEntityType.President, president.Id, cancellationToken);
         var mandateLinks = await store.ListFactSourcesForAsync(ContentEntityType.Presidency, mandates.Select(item => item.Id).ToList(), cancellationToken);
+        var topics = await store.CountLawTopicsAsync(MandateCoverage.Redemocratization, president.Id, cancellationToken);
+        var lawTotal = await store.CountLawsAsync(MandateCoverage.Redemocratization, president.Id, cancellationToken);
+        var periodMetrics = (await BuildAreasAsync(president.Id, cancellationToken)).SelectMany(area => area.Rows).ToList();
         var parties = mandates.Select(item => item.Party).Where(item => !string.IsNullOrWhiteSpace(item)).Distinct().ToList();
         var mandateLabel = mandates.Count == 0
             ? Citations.Mandate(president.StartDate, president.EndDate)
@@ -113,8 +136,14 @@ public sealed class QueryService(IHistoryStore store, IDistributedCache cache)
             statements,
             values.Select(MapPoint).ToList(),
             Citations.Map(links, true),
-            BuildSections(eventCards, policyCards));
+            BuildSections(eventCards, policyCards),
+            topics,
+            lawTotal,
+            periodMetrics);
     }
+
+    public Task<IReadOnlyList<AreaPanelDto>> AreasAsync(CancellationToken cancellationToken) =>
+        BuildAreasAsync(null, cancellationToken);
 
     public async Task<PagedResult<LawCardDto>> LawsAsync(LawQuery query, CancellationToken cancellationToken)
     {
@@ -273,6 +302,80 @@ public sealed class QueryService(IHistoryStore store, IDistributedCache cache)
     {
         ContentPermissions.EnsureCanEdit(actor);
         return await store.AdminStatsAsync(cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<AreaPanelDto>> BuildAreasAsync(Guid? presidentId, CancellationToken cancellationToken)
+    {
+        var mandates = (await store.ListPresidenciesAsync(true, null, cancellationToken))
+            .Where(mandate => mandate.President is { Status: PublicationStatus.Published })
+            .ToList();
+        var observations = await store.ListObservationsAsync(cancellationToken);
+        var bySlug = observations.GroupBy(item => item.Indicator?.Slug ?? string.Empty).ToDictionary(group => group.Key, group => group.OrderBy(item => item.ReferenceDate).ToList());
+        var visible = mandates.Where(mandate => presidentId is null
+            ? mandate.StartDate >= MandateCoverage.Redemocratization || mandate.EndDate is null || mandate.EndDate >= MandateCoverage.Redemocratization
+            : mandate.PresidentId == presidentId).ToList();
+
+        MandateMetricDto? Row(Presidency mandate, string indicator, string text, IndicatorObservation? sample)
+        {
+            if (string.IsNullOrWhiteSpace(text) || mandate.President is null || sample?.Source is null)
+                return null;
+            return new MandateMetricDto(
+                mandate.President.FullName,
+                mandate.President.Slug,
+                Citations.Mandate(mandate.StartDate, mandate.EndDate),
+                indicator,
+                text,
+                sample.Source.Name,
+                sample.Source.Url);
+        }
+
+        List<MandateMetricDto> Collect(string slug, Func<IReadOnlyList<IndicatorObservation>, Presidency, (string Text, IndicatorObservation? Sample)> build)
+        {
+            if (!bySlug.TryGetValue(slug, out var rows))
+                return [];
+            var result = new List<MandateMetricDto>();
+            foreach (var mandate in visible)
+            {
+                var (text, sample) = build(rows, mandate);
+                var row = Row(mandate, rows[0].Indicator?.Name ?? slug, text, sample);
+                if (row is not null)
+                    result.Add(row);
+            }
+            return result;
+        }
+
+        var inflation = Collect("inflacao", (rows, mandate) =>
+        {
+            var inside = rows.Where(item => MandateCoverage.Find(mandates, item.ReferenceDate)?.Id == mandate.Id).ToList();
+            return (PeriodMetrics.AccumulatedInflation(inside.Select(item => item.Value).ToList()), inside.FirstOrDefault());
+        });
+        var product = Collect("pib", (rows, mandate) =>
+        {
+            var inside = rows.Where(item => MandateCoverage.CoversFullYear(mandates, mandate, item.ReferenceDate.Year)).ToList();
+            return (PeriodMetrics.AverageAnnualChange(inside.Select(item => item.Value).ToList(), "1996–2023"), inside.FirstOrDefault());
+        });
+        var jobs = Collect("desemprego", (rows, mandate) =>
+        {
+            var inside = rows.Where(item => MandateCoverage.Find(mandates, item.ReferenceDate)?.Id == mandate.Id).ToList();
+            if (inside.Count == 0)
+                return ("", null);
+            return (PeriodMetrics.UnemploymentSpan(inside[0].Value, inside[^1].Value), inside[0]);
+        });
+        var wages = Collect("salario-minimo", (rows, mandate) =>
+        {
+            var inside = rows.Where(item => MandateCoverage.Find(mandates, item.ReferenceDate)?.Id == mandate.Id).ToList();
+            if (inside.Count == 0)
+                return ("", null);
+            var first = inside[0];
+            var last = inside[^1];
+            return (PeriodMetrics.NominalWage(first.ReferenceDate, first.Value, last.ReferenceDate, last.Value), first);
+        });
+
+        return
+        [
+            new AreaPanelDto("Economia", "economia", "IPCA mensal (IBGE) e variação anual do volume do PIB (IBGE). " + PeriodMetrics.Disclaimer, inflation.Concat(product).ToList()),
+            new AreaPanelDto("Trabalho", "trabalho", "Salário mínimo nominal (Banco Central, SGS 1619) e taxa de desocupação trimestral (IBGE, a partir de 2012). " + PeriodMetrics.Disclaimer, wages.Concat(jobs).ToList())
+        ];
     }
 
     private async Task<IReadOnlyList<EventCardDto>> MapEventsAsync(IReadOnlyList<HistoricalEvent> events, bool publishedOnly, CancellationToken cancellationToken)

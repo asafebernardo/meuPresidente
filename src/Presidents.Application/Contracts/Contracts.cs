@@ -171,7 +171,10 @@ public sealed record PresidentDetailDto(
     IReadOnlyList<StatementDto> Statements,
     IReadOnlyList<IndicatorPointDto> Indicators,
     IReadOnlyList<SourceCitationDto> Sources,
-    IReadOnlyList<CategorySectionDto> Sections);
+    IReadOnlyList<CategorySectionDto> Sections,
+    IReadOnlyList<TopicCountDto> LawTopics,
+    int LawTotal,
+    IReadOnlyList<MandateMetricDto> PeriodMetrics);
 
 public sealed record CategorySectionDto(string Slug, string Name, IReadOnlyList<EventCardDto> Events, IReadOnlyList<PolicyCardDto> Policies);
 
@@ -190,13 +193,36 @@ public sealed record TimelineEventDto(string Title, string Slug, DateOnly? Event
 
 public sealed record TimelineDto(IReadOnlyList<TimelineMandateDto> Mandates, IReadOnlyList<TimelineEventDto> Events);
 
+public sealed record TopicCountDto(Guid Id, string Name, string Slug, int LawCount);
+
+public sealed record PresidentLawShareDto(Guid Id, string Name, string Slug, string Mandate, int LawCount);
+
+public sealed record MandateMetricDto(
+    string PresidentName,
+    string PresidentSlug,
+    string MandateLabel,
+    string Indicator,
+    string Text,
+    string SourceName,
+    string? SourceUrl);
+
+public sealed record AreaPanelDto(
+    string Name,
+    string Slug,
+    string SeriesNote,
+    IReadOnlyList<MandateMetricDto> Rows);
+
 public sealed record HomePageDto(
     IReadOnlyList<PresidentListItemDto> Presidents,
     IReadOnlyList<CategoryDto> Categories,
     IReadOnlyList<EventCardDto> RecentEvents,
     IReadOnlyList<LawCardDto> Laws,
     IReadOnlyList<TimelineMandateDto> Timeline,
-    PublicCounts Counts);
+    PublicCounts Counts,
+    int LawsSinceRedemocratization,
+    IReadOnlyList<TopicCountDto> Topics,
+    IReadOnlyList<PresidentLawShareDto> LawShares,
+    IReadOnlyList<AreaPanelDto> Areas);
 
 public sealed class PresidentForm
 {
